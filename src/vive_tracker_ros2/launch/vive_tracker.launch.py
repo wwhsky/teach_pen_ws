@@ -6,8 +6,8 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument("frame_id", default_value="steamvr_world"),
-        DeclareLaunchArgument("child_frame_prefix", default_value="vive_tracker"),
+        DeclareLaunchArgument("frame_id", default_value="steamvr_base"),
+        DeclareLaunchArgument("child_frame_prefix", default_value="tracker_frame"),
         DeclareLaunchArgument("topic_prefix", default_value="/vive_tracker"),
         DeclareLaunchArgument("device_serial", default_value=""),
         DeclareLaunchArgument("tracking_universe", default_value="standing"),

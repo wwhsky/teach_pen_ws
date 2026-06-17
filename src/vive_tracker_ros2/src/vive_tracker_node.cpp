@@ -160,8 +160,8 @@ public:
   : Node("vive_tracker_node")
   {
     // 参数都放在 launch 中可配置，便于后续切换 frame 名、发布频率或只读取指定 serial。
-    m_frame_id = declare_parameter<std::string>("frame_id", "steamvr_world");
-    m_child_frame_prefix = declare_parameter<std::string>("child_frame_prefix", "vive_tracker");
+    m_frame_id = declare_parameter<std::string>("frame_id", "steamvr_base");
+    m_child_frame_prefix = declare_parameter<std::string>("child_frame_prefix", "tracker_frame");
     m_topic_prefix = declare_parameter<std::string>("topic_prefix", "/vive_tracker");
     m_device_serial_filter = declare_parameter<std::string>("device_serial", "");
     m_publish_tf = declare_parameter<bool>("publish_tf", true);

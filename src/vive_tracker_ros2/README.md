@@ -33,7 +33,7 @@ The node publishes:
 ```text
 /vive_tracker/pose
 /vive_tracker/<serial>/pose
-/tf: steamvr_world -> vive_tracker_<serial>
+/tf: steamvr_base -> tracker_frame_<serial>
 ```
 
 `/vive_tracker/pose` is the first valid tracker seen in each polling cycle.
@@ -42,8 +42,8 @@ Per-device topics use a sanitized tracker serial number.
 ## Useful Parameters
 
 ```text
-frame_id                 default: steamvr_world
-child_frame_prefix       default: vive_tracker
+frame_id                 default: steamvr_base
+child_frame_prefix       default: tracker_frame
 topic_prefix             default: /vive_tracker
 device_serial            default: empty, publish all trackers
 tracking_universe        default: standing, options: standing, seated, raw
@@ -61,5 +61,5 @@ ros2 launch vive_tracker_ros2 vive_tracker.launch.py device_serial:=LHR-XXXXXXX
 Query TF:
 
 ```bash
-ros2 run tf2_ros tf2_echo steamvr_world vive_tracker_lhr_xxxxxxx
+ros2 run tf2_ros tf2_echo steamvr_base tracker_frame_lhr_xxxxxxx
 ```
