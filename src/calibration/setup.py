@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'calibrate_vr_to_robot = calibration.calibrate_vr_to_robot:main',
             'calibrate_tool = calibration.calibrate_tool:main',
+            'calibrate_workpiece = calibration.calibrate_workpiece:main',
             'publish_calibration_tf = calibration.publish_calibration_tf:main',
         ],
     },

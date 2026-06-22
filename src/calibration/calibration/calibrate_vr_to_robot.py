@@ -52,15 +52,15 @@ class VrToRobotSampleCollector(Node):
         super().__init__("calibrate_vr_to_robot")
 
         self.declare_parameter("tracker_parent_frame", "steamvr_base")
-        self.declare_parameter("tracker_frame", "tracker_frame")
+        self.declare_parameter("tracker_tip_frame", "teaching_pen_tip")
         self.declare_parameter("robot_parent_frame", "robot_base")
-        self.declare_parameter("robot_tool_frame", "robot_tcp")
+        self.declare_parameter("robot_tip_frame", "welding_torch_tip")
         self.declare_parameter("output_file", "vr_to_robot_samples.yaml")
 
         self.tracker_parent_frame = self.get_parameter("tracker_parent_frame").value
-        self.tracker_frame = self.get_parameter("tracker_frame").value
+        self.tracker_tip_frame = self.get_parameter("tracker_tip_frame").value
         self.robot_parent_frame = self.get_parameter("robot_parent_frame").value
-        self.robot_tool_frame = self.get_parameter("robot_tool_frame").value
+        self.robot_tip_frame = self.get_parameter("robot_tip_frame").value
         self.output_file = self.get_parameter("output_file").value
 
         self.tf_buffer = Buffer()
@@ -68,31 +68,32 @@ class VrToRobotSampleCollector(Node):
         self.samples = []
 
     def sample_once(self):
-        tracker_transform = self.lookup_transform(
+        tracker_tip_transform = self.lookup_transform(
             self.tracker_parent_frame,
-            self.tracker_frame,
-            "tracker",
+            self.tracker_tip_frame,
+            "tracker tip",
         )
-        robot_transform = self.lookup_transform(
+        robot_tip_transform = self.lookup_transform(
             self.robot_parent_frame,
-            self.robot_tool_frame,
-            "robot",
+            self.robot_tip_frame,
+            "robot tip",
         )
 
-        if tracker_transform is None or robot_transform is None:
+        if tracker_tip_transform is None or robot_tip_transform is None:
             self.get_logger().warn("sample skipped because at least one TF lookup failed")
             return False
 
         self.samples.append({
             "index": len(self.samples) + 1,
-            "tracker": tracker_transform,
-            "robot": robot_transform,
+            "tracker_tip": tracker_tip_transform,
+            "robot_tip": robot_tip_transform,
         })
 
-        tracker_xyz = tracker_transform["translation"]
-        robot_xyz = robot_transform["translation"]
+        tracker_xyz = tracker_tip_transform["translation"]
+        robot_xyz = robot_tip_transform["translation"]
         self.get_logger().info(
-            "sample %d: tracker xyz=[%.6f, %.6f, %.6f], robot xyz=[%.6f, %.6f, %.6f]"
+            "sample %d: teaching_pen_tip xyz=[%.6f, %.6f, %.6f], "
+            "welding_torch_tip xyz=[%.6f, %.6f, %.6f]"
             % (
                 len(self.samples),
                 tracker_xyz[0],
@@ -138,11 +139,11 @@ class VrToRobotSampleCollector(Node):
             return None
 
         tracker_points = np.array(
-            [sample["tracker"]["translation"] for sample in self.samples],
+            [sample["tracker_tip"]["translation"] for sample in self.samples],
             dtype=float,
         )
         robot_points = np.array(
-            [sample["robot"]["translation"] for sample in self.samples],
+            [sample["robot_tip"]["translation"] for sample in self.samples],
             dtype=float,
         )
 
@@ -177,6 +178,10 @@ class VrToRobotSampleCollector(Node):
 
         return {
             "type": "rigid_transform_svd",
+            "description": (
+                "Computed from teaching_pen_tip positions in steamvr_base and "
+                "welding_torch_tip positions in robot_base."
+            ),
             "parent_frame": self.robot_parent_frame,
             "child_frame": self.tracker_parent_frame,
             "translation": translation.tolist(),
@@ -194,9 +199,9 @@ class VrToRobotSampleCollector(Node):
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "frames": {
                 "tracker_parent_frame": self.tracker_parent_frame,
-                "tracker_frame": self.tracker_frame,
+                "tracker_tip_frame": self.tracker_tip_frame,
                 "robot_parent_frame": self.robot_parent_frame,
-                "robot_tool_frame": self.robot_tool_frame,
+                "robot_tip_frame": self.robot_tip_frame,
             },
             "sample_count": len(self.samples),
             "samples": self.samples,
@@ -220,8 +225,8 @@ def main():
 
     print("")
     print("VR-to-robot sample collector")
-    print(f"  Tracker TF: {node.tracker_parent_frame} <- {node.tracker_frame}")
-    print(f"  Robot TF:   {node.robot_parent_frame} <- {node.robot_tool_frame}")
+    print(f"  Tracker tip TF: {node.tracker_parent_frame} <- {node.tracker_tip_frame}")
+    print(f"  Robot tip TF:   {node.robot_parent_frame} <- {node.robot_tip_frame}")
     print(f"  Output:     {node.output_file}")
     print("")
     print("Press Enter to sample both TFs, 'q' then Enter to save and quit.")

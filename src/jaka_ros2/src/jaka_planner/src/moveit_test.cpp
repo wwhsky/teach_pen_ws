@@ -25,7 +25,7 @@ int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
     rclcpp::NodeOptions options;
-    options.parameter_overrides({rclcpp::Parameter("use_sim_time", true)});
+    options.parameter_overrides({rclcpp::Parameter("use_sim_time", true)}); // 使用ros的仿真时间（可以暂停等）需要有节点发布/clock
     signal(SIGINT, sigintHandler);
     auto node = rclcpp::Node::make_shared("jaka_planner", options);
 

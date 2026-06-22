@@ -1,0 +1,5 @@
+parent_frame: tracker_frame
+child_frame: teaching_pen_tip
+translation: [0.0, 0.0, 0.12]
+rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+

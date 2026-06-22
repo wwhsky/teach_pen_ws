@@ -1,0 +1,5 @@
+parent_frame: robot_base
+child_frame: workpiece_frame
+translation: [0.4, 0.0, 0.1]
+rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+

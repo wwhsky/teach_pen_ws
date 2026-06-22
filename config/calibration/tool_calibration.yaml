@@ -1,0 +1,8 @@
+created_at: '2026-06-22T10:58:41'
+frames:
+  reference_frame: robot_base
+  parent_frame: robot_flange
+  tip_frame: welding_torch_tip
+sample_count: 0
+samples: []
+calibration_result: null

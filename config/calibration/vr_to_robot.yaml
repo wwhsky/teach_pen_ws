@@ -1,0 +1,5 @@
+parent_frame: robot_base
+child_frame: steamvr_base
+translation: [0.5, 0.0, 0.0]
+rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+
