@@ -400,6 +400,30 @@
       effort="1000"
       velocity="3.14" />
   </joint>
+  <!-- Tool Assembly（相机+支架+焊枪） -->
+  <link name="tool_assembly">
+    <visual>
+      <origin xyz="0 0 0.0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://jaka_description/meshes/jaka_zu5_meshes/Assembly_binary.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="tool_assembly_gray">
+        <color rgba="0.2 0.2 0.2 1" />
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0.0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://jaka_description/meshes/jaka_zu5_meshes/AssemblySimplified_binary.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="Link6_to_tool_assembly" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="Link6" />
+    <child link="tool_assembly" />
+  </joint>
   
   <transmission name="trans_joint_1">
         <type>transmission_interface/SimpleTransmission</type>

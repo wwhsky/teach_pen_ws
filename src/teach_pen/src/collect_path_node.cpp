@@ -25,6 +25,7 @@ public:
   CollectPathNode()
   : Node("collect_path_node"),
     m_tf_buffer(std::make_unique<tf2_ros::Buffer>(get_clock())),
+    
     m_tf_listener(std::make_unique<tf2_ros::TransformListener>(*m_tf_buffer))
   {
     m_base_frame = declare_parameter<std::string>("base_frame", "robot_base");
