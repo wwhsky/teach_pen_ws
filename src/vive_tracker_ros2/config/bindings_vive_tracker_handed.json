@@ -1,0 +1,46 @@
+{
+  "action_manifest_version": 1,
+  "controller_type": "vive_tracker_handed",
+  "bindings": {
+    "/actions/teach_pen": {
+      "sources": [
+        {
+          "path": "/user/hand/right/input/trigger",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/teach_pen/in/sample"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/grip",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/teach_pen/in/grip"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/thumb",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/teach_pen/in/thumb"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/application_menu",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/teach_pen/in/menu"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

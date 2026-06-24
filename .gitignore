@@ -30,3 +30,6 @@ __pycache__/
 *.log
 core
 core.*
+
+# Locally downloaded third-party SDKs
+third_party/openvr/

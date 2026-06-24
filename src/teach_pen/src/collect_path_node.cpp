@@ -41,8 +41,8 @@ public:
 
     m_buttons_sub = create_subscription<sensor_msgs::msg::Joy>(
       m_buttons_topic,
-      rclcpp::QoS(10),
-      std::bind(&CollectPathNode::buttonsCallback, this, std::placeholders::_1));
+      rclcpp::QoS(10), // 通信质量
+      std::bind(&CollectPathNode::buttonsCallback, this, std::placeholders::_1)); // 回调函数，在收到topic时使用
 
     RCLCPP_INFO(
       get_logger(),
@@ -52,6 +52,7 @@ public:
   }
 
 private:
+  // 回调函数，在每次收到消息时被调用
   void buttonsCallback(const sensor_msgs::msg::Joy::SharedPtr msg)
   {
     const bool sample_pressed = isPressed(*msg, m_sample_button);
@@ -63,6 +64,7 @@ private:
       sampleOnce("button");
     }
 
+    // 在每次m_record_button按下时切换m_recording
     if (risingEdge(m_record_button, record_pressed)) {
       m_recording = !m_recording;
       m_last_record_sample_time = rclcpp::Time(0, 0, get_clock()->get_clock_type());
@@ -77,6 +79,7 @@ private:
       saveSamples();
     }
 
+    // 在recording状态下持续采样
     if (m_recording) {
       const auto now_time = now();
       if (m_last_record_sample_time.nanoseconds() == 0 ||
@@ -94,7 +97,7 @@ private:
   bool sampleOnce(const std::string & reason)
   {
     try {
-      const auto transform = m_tf_buffer->lookupTransform(
+      const auto transform = m_tf_buffer->lookupTransform( // 查找机械臂基座标系到笔尖坐标系的变换
         m_base_frame,
         m_tip_frame,
         tf2::TimePointZero,
@@ -187,6 +190,7 @@ private:
       return false;
     }
     const auto button_index = static_cast<std::size_t>(index);
+    // 防止第一帧，m_previous_buttons为空时没法判断，此时直接判定为上升沿
     if (button_index >= m_previous_buttons.size()) {
       return true;
     }

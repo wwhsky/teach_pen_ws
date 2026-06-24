@@ -15,6 +15,10 @@ def generate_launch_description():
         DeclareLaunchArgument("publish_tf", default_value="true"),
         DeclareLaunchArgument("publish_first_pose_topic", default_value="true"),
         DeclareLaunchArgument("debug_devices", default_value="false"),
+        DeclareLaunchArgument("debug_events", default_value="false"),
+        DeclareLaunchArgument("enable_action_input", default_value="false"),
+        DeclareLaunchArgument("action_manifest_path", default_value=""),
+        DeclareLaunchArgument("application_manifest_path", default_value=""),
         Node(
             package="vive_tracker_ros2",
             executable="vive_tracker_node",
@@ -30,6 +34,12 @@ def generate_launch_description():
                 "publish_tf": LaunchConfiguration("publish_tf"),
                 "publish_first_pose_topic": LaunchConfiguration("publish_first_pose_topic"),
                 "debug_devices": LaunchConfiguration("debug_devices"),
+                "debug_events": LaunchConfiguration("debug_events"),
+                "enable_action_input": LaunchConfiguration("enable_action_input"),
+                "action_manifest_path": LaunchConfiguration("action_manifest_path"),
+                "application_manifest_path": LaunchConfiguration(
+                    "application_manifest_path"
+                ),
             }],
         ),
     ])

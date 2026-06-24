@@ -9,6 +9,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -21,12 +22,17 @@ if(PkgConfig_FOUND)
   pkg_check_modules(OPENVR QUIET openvr)
 endif()
 
+set(OPENVR_WORKSPACE_ROOT
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/openvr"
+)
+
 find_path(OPENVR_INCLUDE_DIR
   NAMES openvr.h
   HINTS
-    ${OPENVR_INCLUDE_DIRS}
     ${OPENVR_ROOT}
     $ENV{OPENVR_ROOT}
+    ${OPENVR_WORKSPACE_ROOT}
+    ${OPENVR_INCLUDE_DIRS}
     $ENV{HOME}/.steam/steam/steamapps/common/SteamVR
     $ENV{HOME}/.local/share/Steam/steamapps/common/SteamVR
     /usr
@@ -37,9 +43,10 @@ find_path(OPENVR_INCLUDE_DIR
 find_library(OPENVR_LIBRARY
   NAMES openvr_api
   HINTS
-    ${OPENVR_LIBRARY_DIRS}
     ${OPENVR_ROOT}
     $ENV{OPENVR_ROOT}
+    ${OPENVR_WORKSPACE_ROOT}
+    ${OPENVR_LIBRARY_DIRS}
     $ENV{HOME}/.steam/steam/steamapps/common/SteamVR
     $ENV{HOME}/.local/share/Steam/steamapps/common/SteamVR
     /usr
@@ -56,7 +63,11 @@ endif()
 add_executable(vive_tracker_node src/vive_tracker_node.cpp)
 target_include_directories(vive_tracker_node PRIVATE ${OPENVR_INCLUDE_DIR})
 target_link_libraries(vive_tracker_node ${OPENVR_LIBRARY})
+set_target_properties(vive_tracker_node PROPERTIES
+  INSTALL_RPATH "$ORIGIN"
+)
 ament_target_dependencies(vive_tracker_node
+  ament_index_cpp
   rclcpp
   geometry_msgs
   sensor_msgs
@@ -67,7 +78,15 @@ install(TARGETS vive_tracker_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
+install(FILES ${OPENVR_LIBRARY}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 

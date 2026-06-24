@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "minimum_required_version": 1,
+  "default_bindings": [
+    {
+      "controller_type": "vive_tracker_handed",
+      "binding_url": "bindings_vive_tracker_handed.json"
+    },
+    {
+      "controller_type": "vive_tracker",
+      "binding_url": "bindings_vive_tracker.json"
+    }
+  ],
+  "actions": [
+    {
+      "name": "/actions/teach_pen/in/sample",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/teach_pen/in/grip",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/teach_pen/in/thumb",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/teach_pen/in/menu",
+      "type": "boolean"
+    }
+  ],
+  "action_sets": [
+    {
+      "name": "/actions/teach_pen",
+      "usage": "single"
+    }
+  ],
+  "localization": [
+    {
+      "language_tag": "en_US",
+      "/actions/teach_pen": "Teach Pen",
+      "/actions/teach_pen/in/sample": "Sample",
+      "/actions/teach_pen/in/grip": "Grip",
+      "/actions/teach_pen/in/thumb": "Thumb",
+      "/actions/teach_pen/in/menu": "Menu"
+    }
+  ]
+}

@@ -239,3 +239,163 @@ step_num = max(step_num, 1);
 - 轨迹真实执行效果依赖 JAKA SDK / 控制器内部如何处理 `servo_j`。
 
 所以上实机前需要谨慎测试速度、加速度、停止逻辑和误差。
+
+## ZU5 末端工具模型
+
+本次将相机、相机支架和焊枪的组合模型接入了 JAKA ZU5 的 URDF，使
+RViz 和 MoveIt 能够显示工具并进行碰撞检查。
+
+### 模型文件
+
+模型位于：
+
+```text
+src/jaka_ros2/src/jaka_description/meshes/jaka_zu5_meshes
+```
+
+当前实际使用：
+
+```text
+Assembly_binary.stl
+AssemblySimplified_binary.stl
+```
+
+- `Assembly_binary.stl`：较完整的外观模型，用于 `<visual>`。
+- `AssemblySimplified_binary.stl`：简化模型，用于 `<collision>`。
+
+原始 CAD 导出的 STL 尺寸单位为毫米，而 URDF 使用米，因此两个 mesh
+都设置了：
+
+```xml
+scale="0.001 0.001 0.001"
+```
+
+RViz 只能可靠读取二进制 STL，所以保留了原始 STL，同时生成了对应的
+`*_binary.stl` 文件供 URDF 使用。
+
+### URDF 结构
+
+当前工具结构保持为：
+
+```text
+link0
+└── robot_base
+
+Link6
+└── robot_flange
+    └── tool_assembly
+```
+
+定义位置：
+
+```text
+src/jaka_ros2/src/jaka_description/urdf/jaka_zu5.urdf
+```
+
+为了保留 JAKA 原始 link 名称，同时让项目代码使用含义更清楚的坐标系，
+URDF 中增加了两个零偏置语义 frame：
+
+```text
+link0 -> robot_base
+Link6 -> robot_flange
+```
+
+它们分别与 JAKA 的 `link0` 和 `Link6` 完全重合。`tool_assembly` 通过
+固定关节连接到 `robot_flange`：
+
+```xml
+<joint name="robot_flange_to_tool_assembly" type="fixed">
+  <origin xyz="0 0 0" rpy="0 0 0" />
+  <parent link="robot_flange" />
+  <child link="tool_assembly" />
+</joint>
+```
+
+当前组合 STL 已经包含相机、支架和焊枪，所以没有再为这些实体分别建立
+可视化 link。`camera_frame` 和焊枪 TCP 属于功能坐标系，后续可以根据
+手眼标定和工具标定结果单独通过 TF 发布，不要求拆分组合 STL。
+
+`Link6` 本身不是由 URDF 节点主动测量出来的。运行时：
+
+```text
+/joint_states
+-> robot_state_publisher
+-> 根据 URDF 正运动学计算
+-> 发布 Link1 ... Link6 以及固定工具关节的 TF
+```
+
+可以使用下面的命令检查：
+
+```bash
+ros2 topic echo /joint_states
+ros2 run tf2_ros tf2_echo Link5 Link6
+ros2 run tf2_ros tf2_echo link0 robot_base
+ros2 run tf2_ros tf2_echo Link6 robot_flange
+ros2 run tf2_ros tf2_echo robot_flange tool_assembly
+```
+
+### MoveIt 碰撞配置
+
+工具的碰撞模型会参与 MoveIt/FCL 的碰撞检查。URDF 中存在
+`<collision>` 只表示“这是碰撞几何”，并不表示当前已经发生碰撞。
+
+`robot_flange` 是没有碰撞几何的语义 frame，工具在物理上仍然安装于
+`Link6` 法兰处。为了允许安装面附近的合理几何重叠，`Link6` 与
+`tool_assembly` 之间的碰撞继续在 SRDF 中忽略：
+
+```xml
+<disable_collisions link1="Link6" link2="tool_assembly" reason="Adjacent"/>
+```
+
+配置位置：
+
+```text
+src/jaka_ros2/src/jaka_zu5_moveit_config/config/jaka_zu5.srdf
+```
+
+如果日志提示工具与 `Link3`、`Link4` 等非相邻连杆碰撞，不应直接加入
+忽略列表。应优先检查：
+
+1. `robot_flange_to_tool_assembly` 的 `xyz` 和 `rpy` 是否符合 CAD 装配坐标。
+2. STL 原点和坐标轴是否与 `Link6` 坐标系一致。
+3. STL 是否正确使用毫米到米的缩放。
+4. 简化碰撞模型是否包含了过大的包络或无关几何。
+5. 当前机械臂起始姿态是否确实使工具碰到了本体。
+
+必要时可以暂时注释工具的 `<collision>`，只用于判断规划失败是否由工具
+碰撞模型引起；确认原因后应恢复碰撞检查。
+
+### 修改后的构建流程
+
+修改 URDF、mesh 或 SRDF 后，需要重新构建对应包并重新启动 MoveIt：
+
+```bash
+cd ~/code/teach_pen_ws
+colcon build --packages-select jaka_description jaka_zu5_moveit_config
+source install/setup.bash
+ros2 launch jaka_zu5_moveit_config demo.launch.py use_rviz_sim:=true
+```
+
+仅在 RViz 中重新加载显示，通常不会使已经运行的
+`robot_state_publisher` 和 `move_group` 自动读取新模型，最稳妥的做法是
+结束原 launch 后重新启动。
+
+### 当前进展与下一步
+
+已经完成：
+
+- 组合工具 STL 接入 ZU5 URDF。
+- 外观模型和简化碰撞模型分开使用。
+- 完成毫米到米的模型缩放。
+- 添加 `link0 -> robot_base` 和 `Link6 -> robot_flange` 语义坐标系。
+- 添加 `robot_flange -> tool_assembly` 固定关节。
+- 在 SRDF 中忽略相邻的 `Link6` 与 `tool_assembly` 碰撞。
+- 在 RViz/MoveIt 中完成基本显示和规划验证。
+
+下一步：
+
+- 从 CAD 确认组合 STL 相对于 `robot_flange` 的准确安装变换。
+- 完成焊枪 TCP 标定，得到工具坐标系相对 `robot_flange` 的位姿。
+- 完成相机手眼标定，发布相机坐标系 TF。
+- 用多组机械臂姿态验证工具不会与本体发生错误碰撞。
+- 将焊缝路径转换为焊枪 TCP 路径，并在 MoveIt 中进行笛卡尔规划。

@@ -1,0 +1,16 @@
+{
+  "source": "builtin",
+  "applications": [
+    {
+      "app_key": "com.teach_pen.vive_tracker_ros2",
+      "launch_type": "binary",
+      "binary_path_linux": "../../../lib/vive_tracker_ros2/vive_tracker_node",
+      "is_dashboard_overlay": false,
+      "strings": {
+        "en_us": {
+          "name": "Teach Pen Vive Tracker"
+        }
+      }
+    }
+  ]
+}

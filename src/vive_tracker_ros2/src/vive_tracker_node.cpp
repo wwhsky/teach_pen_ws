@@ -5,11 +5,15 @@
 #include <cctype>
 #include <map>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include <unistd.h>
+
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <openvr.h>
@@ -211,6 +215,64 @@ std::string buttonStateToString(const vr::VRControllerState_t & state)
   return stream.str();
 }
 
+std::string eventTypeToString(uint32_t event_type)
+{
+  switch (event_type) {
+    case vr::VREvent_TrackedDeviceActivated:
+      return "TrackedDeviceActivated";
+    case vr::VREvent_TrackedDeviceDeactivated:
+      return "TrackedDeviceDeactivated";
+    case vr::VREvent_ButtonPress:
+      return "ButtonPress";
+    case vr::VREvent_ButtonUnpress:
+      return "ButtonUnpress";
+    case vr::VREvent_ButtonTouch:
+      return "ButtonTouch";
+    case vr::VREvent_ButtonUntouch:
+      return "ButtonUntouch";
+    default:
+      return {};
+  }
+}
+
+std::string inputErrorToString(vr::EVRInputError error)
+{
+  switch (error) {
+    case vr::VRInputError_None:
+      return "None";
+    case vr::VRInputError_NameNotFound:
+      return "NameNotFound";
+    case vr::VRInputError_WrongType:
+      return "WrongType";
+    case vr::VRInputError_InvalidHandle:
+      return "InvalidHandle";
+    case vr::VRInputError_InvalidParam:
+      return "InvalidParam";
+    case vr::VRInputError_NoSteam:
+      return "NoSteam";
+    case vr::VRInputError_IPCError:
+      return "IPCError";
+    case vr::VRInputError_NoActiveActionSet:
+      return "NoActiveActionSet";
+    case vr::VRInputError_InvalidDevice:
+      return "InvalidDevice";
+    case vr::VRInputError_NoData:
+      return "NoData";
+    case vr::VRInputError_MismatchedActionManifest:
+      return "MismatchedActionManifest";
+    case vr::VRInputError_PermissionDenied:
+      return "PermissionDenied";
+    default:
+      return "Other";
+  }
+}
+
+std::string applicationErrorToString(vr::EVRApplicationError error)
+{
+  const char * error_name = vr::VRApplications()->GetApplicationsErrorNameFromEnum(error);
+  return error_name == nullptr ? "unknown" : error_name;
+}
+
 }  // namespace
 
 class ViveTrackerNode : public rclcpp::Node
@@ -227,6 +289,11 @@ public:
     m_publish_tf = declare_parameter<bool>("publish_tf", true);
     m_publish_first_pose_topic = declare_parameter<bool>("publish_first_pose_topic", true);
     m_debug_devices = declare_parameter<bool>("debug_devices", false);
+    m_debug_events = declare_parameter<bool>("debug_events", false);
+    m_enable_action_input = declare_parameter<bool>("enable_action_input", false);
+    m_action_manifest_path = declare_parameter<std::string>("action_manifest_path", "");
+    m_application_manifest_path =
+      declare_parameter<std::string>("application_manifest_path", "");
     const double update_rate_hz = declare_parameter<double>("update_rate_hz", 100.0);
     const auto universe_name = declare_parameter<std::string>("tracking_universe", "standing");
     m_tracking_universe = parseTrackingUniverse(universe_name);
@@ -240,6 +307,9 @@ public:
               std::string("Failed to initialize OpenVR: ") +
               (error_name == nullptr ? "unknown error" : error_name));
     }
+
+    identifyOpenVrApplication();
+    initializeActionInput();
 
     if (m_publish_tf) {
       m_tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
@@ -275,6 +345,9 @@ public:
 private:
   void pollTrackers()
   {
+    pollOpenVrEvents();
+    auto action_buttons = pollActionButtons();
+
     // 一次性读取 OpenVR 当前所有 tracked devices 的位姿，后面再筛选 Vive Tracker。
     std::array<vr::TrackedDevicePose_t, vr::k_unMaxTrackedDeviceCount> poses;
     m_vr_system->GetDeviceToAbsoluteTrackingPose(
@@ -306,13 +379,22 @@ private:
       // topic 仍按 serial 区分，便于调试 OpenVR 实际识别到的设备。
       const std::string tracker_name = sanitizeName(serial.empty() ? std::to_string(index) : serial);
 
-      vr::VRControllerState_t controller_state{};
-      if (m_vr_system->GetControllerState(index, &controller_state, sizeof(controller_state))) {
-        auto joy_msg = makeJoyMessage(controller_state);
-        getButtonsPublisher(tracker_name)->publish(joy_msg);
+      if (action_buttons.has_value()) {
+        getButtonsPublisher(tracker_name)->publish(*action_buttons);
         if (!published_first_buttons) {
-          m_first_buttons_publisher->publish(joy_msg);
+          m_first_buttons_publisher->publish(*action_buttons);
           published_first_buttons = true;
+        }
+        action_buttons.reset();
+      } else {
+        vr::VRControllerState_t controller_state{};
+        if (m_vr_system->GetControllerState(index, &controller_state, sizeof(controller_state))) {
+          auto joy_msg = makeJoyMessage(controller_state);
+          getButtonsPublisher(tracker_name)->publish(joy_msg);
+          if (!published_first_buttons) {
+            m_first_buttons_publisher->publish(joy_msg);
+            published_first_buttons = true;
+          }
         }
       }
 
@@ -337,6 +419,234 @@ private:
           m_tf_broadcaster->sendTransform(transform);
         }
       }
+    }
+  }
+
+  void identifyOpenVrApplication()
+  {
+    if (!m_enable_action_input) {
+      return;
+    }
+
+    const auto package_share =
+      ament_index_cpp::get_package_share_directory("vive_tracker_ros2");
+    if (m_application_manifest_path.empty()) {
+      m_application_manifest_path = package_share + "/config/vive_tracker_ros2.vrmanifest";
+    }
+
+    auto * applications = vr::VRApplications();
+    if (applications == nullptr) {
+      RCLCPP_WARN(get_logger(), "OpenVR IVRApplications interface is unavailable");
+      return;
+    }
+
+    auto error = applications->AddApplicationManifest(
+      m_application_manifest_path.c_str(), true);
+    if (error != vr::VRApplicationError_None) {
+      RCLCPP_WARN(
+        get_logger(), "failed to register OpenVR application manifest %s: %s (%d)",
+        m_application_manifest_path.c_str(),
+        applicationErrorToString(error).c_str(), error);
+      return;
+    }
+
+    error = applications->IdentifyApplication(
+      static_cast<uint32_t>(getpid()), m_openvr_app_key.c_str());
+    if (error != vr::VRApplicationError_None) {
+      RCLCPP_WARN(
+        get_logger(), "failed to identify OpenVR application as %s: %s (%d)",
+        m_openvr_app_key.c_str(), applicationErrorToString(error).c_str(), error);
+      return;
+    }
+
+    RCLCPP_INFO(
+      get_logger(), "OpenVR application identified as %s",
+      m_openvr_app_key.c_str());
+  }
+
+  void initializeActionInput()
+  {
+    if (!m_enable_action_input) {
+      return;
+    }
+
+    if (m_action_manifest_path.empty()) {
+      m_action_manifest_path =
+        ament_index_cpp::get_package_share_directory("vive_tracker_ros2") +
+        "/config/actions.json";
+    }
+
+    auto * input = vr::VRInput();
+    if (input == nullptr) {
+      RCLCPP_WARN(get_logger(), "OpenVR IVRInput interface is unavailable");
+      return;
+    }
+
+    auto error = input->SetActionManifestPath(m_action_manifest_path.c_str());
+    if (error != vr::VRInputError_None) {
+      RCLCPP_WARN(
+        get_logger(), "failed to set action manifest %s: %s (%d)",
+        m_action_manifest_path.c_str(), inputErrorToString(error).c_str(), error);
+      return;
+    }
+
+    error = input->GetActionSetHandle("/actions/teach_pen", &m_action_set);
+    if (error != vr::VRInputError_None) {
+      RCLCPP_WARN(
+        get_logger(), "failed to get action set: %s (%d)",
+        inputErrorToString(error).c_str(), error);
+      return;
+    }
+
+    const std::array<std::pair<const char *, vr::VRActionHandle_t *>, 4> actions{{
+      {"/actions/teach_pen/in/sample", &m_trigger_action},
+      {"/actions/teach_pen/in/grip", &m_grip_action},
+      {"/actions/teach_pen/in/thumb", &m_thumb_action},
+      {"/actions/teach_pen/in/menu", &m_menu_action},
+    }};
+
+    for (const auto & action : actions) {
+      error = input->GetActionHandle(action.first, action.second);
+      if (error != vr::VRInputError_None) {
+        RCLCPP_WARN(
+          get_logger(), "failed to get action %s: %s (%d)",
+          action.first, inputErrorToString(error).c_str(), error);
+        return;
+      }
+      RCLCPP_INFO(
+        get_logger(), "OpenVR action handle %s = %llu",
+        action.first, static_cast<unsigned long long>(*action.second));
+    }
+
+    m_action_input_ready = true;
+    RCLCPP_INFO(
+      get_logger(), "OpenVR action input initialized from %s, action_set=%llu",
+      m_action_manifest_path.c_str(),
+      static_cast<unsigned long long>(m_action_set));
+  }
+
+  std::optional<sensor_msgs::msg::Joy> pollActionButtons()
+  {
+    if (!m_action_input_ready) {
+      return std::nullopt;
+    }
+
+    vr::VRActiveActionSet_t active_set{};
+    active_set.ulActionSet = m_action_set;
+    const auto update_error = vr::VRInput()->UpdateActionState(
+      &active_set, sizeof(active_set), 1);
+    if (update_error != vr::VRInputError_None) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "OpenVR UpdateActionState failed: %s (%d)",
+        inputErrorToString(update_error).c_str(), update_error);
+      return std::nullopt;
+    }
+
+    const std::array<std::pair<const char *, vr::VRActionHandle_t>, 4> actions{{
+      {"sample", m_trigger_action},
+      {"grip", m_grip_action},
+      {"thumb", m_thumb_action},
+      {"menu", m_menu_action},
+    }};
+    std::array<vr::InputDigitalActionData_t, 4> states{};
+    bool any_active = false;
+
+    for (std::size_t index = 0; index < actions.size(); ++index) {
+      const auto error = vr::VRInput()->GetDigitalActionData(
+        actions[index].second,
+        &states[index],
+        sizeof(states[index]),
+        vr::k_ulInvalidInputValueHandle);
+      if (error != vr::VRInputError_None) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "OpenVR action %s read failed: %s (%d)",
+          actions[index].first, inputErrorToString(error).c_str(), error);
+        continue;
+      }
+
+      any_active = any_active || states[index].bActive;
+      if (states[index].bActive && states[index].bChanged) {
+        RCLCPP_INFO(
+          get_logger(), "OpenVR action %s %s",
+          actions[index].first, states[index].bState ? "pressed" : "released");
+      }
+    }
+
+    const auto current_time = now();
+    if (m_debug_events &&
+      (m_last_action_debug_time.nanoseconds() == 0 ||
+      (current_time - m_last_action_debug_time).seconds() >= 2.0))
+    {
+      m_last_action_debug_time = current_time;
+      RCLCPP_INFO(
+        get_logger(),
+        "OpenVR actions active=[sample:%d grip:%d thumb:%d menu:%d] "
+        "state=[%d %d %d %d]",
+        states[0].bActive, states[1].bActive, states[2].bActive, states[3].bActive,
+        states[0].bState, states[1].bState, states[2].bState, states[3].bState);
+    }
+
+    if (!any_active) {
+      return std::nullopt;
+    }
+
+    sensor_msgs::msg::Joy joy_msg;
+    joy_msg.header.stamp = current_time;
+    joy_msg.header.frame_id = m_child_frame_id;
+    joy_msg.buttons = {
+      states[0].bActive && states[0].bState ? 1 : 0,
+      states[1].bActive && states[1].bState ? 1 : 0,
+      states[2].bActive && states[2].bState ? 1 : 0,
+      states[3].bActive && states[3].bState ? 1 : 0,
+    };
+    return joy_msg;
+  }
+
+  void pollOpenVrEvents()
+  {
+    vr::VREvent_t event{};
+    while (m_vr_system->PollNextEvent(&event, sizeof(event))) {
+      if (!m_debug_events) {
+        continue;
+      }
+
+      const std::string event_name = eventTypeToString(event.eventType);
+      if (event_name.empty()) {
+        continue;
+      }
+
+      const auto index = event.trackedDeviceIndex;
+      std::string serial;
+      if (index < vr::k_unMaxTrackedDeviceCount) {
+        serial = getTrackedDeviceString(m_vr_system, index, vr::Prop_SerialNumber_String);
+      }
+
+      if (event.eventType == vr::VREvent_ButtonPress ||
+        event.eventType == vr::VREvent_ButtonUnpress ||
+        event.eventType == vr::VREvent_ButtonTouch ||
+        event.eventType == vr::VREvent_ButtonUntouch)
+      {
+        const auto button = static_cast<vr::EVRButtonId>(event.data.controller.button);
+        const char * button_name = m_vr_system->GetButtonIdNameFromEnum(button);
+        RCLCPP_INFO(
+          get_logger(),
+          "OpenVR event=%s index=%u serial=%s button=%u (%s)",
+          event_name.c_str(),
+          index,
+          serial.empty() ? "<unknown>" : serial.c_str(),
+          event.data.controller.button,
+          button_name == nullptr ? "unknown" : button_name);
+        continue;
+      }
+
+      RCLCPP_INFO(
+        get_logger(),
+        "OpenVR event=%s index=%u serial=%s",
+        event_name.c_str(),
+        index,
+        serial.empty() ? "<unknown>" : serial.c_str());
     }
   }
 
@@ -464,6 +774,18 @@ private:
   bool m_publish_tf{true};
   bool m_publish_first_pose_topic{true};
   bool m_debug_devices{false};
+  bool m_debug_events{false};
+  bool m_enable_action_input{false};
+  bool m_action_input_ready{false};
+  std::string m_action_manifest_path;
+  std::string m_application_manifest_path;
+  const std::string m_openvr_app_key{"com.teach_pen.vive_tracker_ros2"};
+  vr::VRActionSetHandle_t m_action_set{vr::k_ulInvalidActionSetHandle};
+  vr::VRActionHandle_t m_trigger_action{vr::k_ulInvalidActionHandle};
+  vr::VRActionHandle_t m_grip_action{vr::k_ulInvalidActionHandle};
+  vr::VRActionHandle_t m_thumb_action{vr::k_ulInvalidActionHandle};
+  vr::VRActionHandle_t m_menu_action{vr::k_ulInvalidActionHandle};
+  rclcpp::Time m_last_action_debug_time{0, 0, RCL_ROS_TIME};
   rclcpp::Time m_last_debug_log_time{0, 0, RCL_ROS_TIME};
   std::map<std::string, rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr>
   m_pose_publishers;

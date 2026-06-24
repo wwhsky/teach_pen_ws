@@ -52,6 +52,13 @@
      <parent link="world"/>
      <child link="link0"/>
   </joint>
+  <!-- 项目统一使用的机械臂基座语义坐标系，与 JAKA link0 完全重合。 -->
+  <link name="robot_base" />
+  <joint name="link0_to_robot_base" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="link0" />
+    <child link="robot_base" />
+  </joint>
   <link
     name="Link1">
     <inertial>
@@ -400,6 +407,13 @@
       effort="1000"
       velocity="3.14" />
   </joint>
+  <!-- 项目统一使用的法兰语义坐标系，与 JAKA Link6 完全重合。 -->
+  <link name="robot_flange" />
+  <joint name="Link6_to_robot_flange" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="Link6" />
+    <child link="robot_flange" />
+  </joint>
   <!-- Tool Assembly（相机+支架+焊枪） -->
   <link name="tool_assembly">
     <visual>
@@ -419,9 +433,9 @@
       </geometry>
     </collision>
   </link>
-  <joint name="Link6_to_tool_assembly" type="fixed">
+  <joint name="robot_flange_to_tool_assembly" type="fixed">
     <origin xyz="0 0 0" rpy="0 0 0" />
-    <parent link="Link6" />
+    <parent link="robot_flange" />
     <child link="tool_assembly" />
   </joint>
   

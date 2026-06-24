@@ -20,6 +20,19 @@ colcon build --packages-select vive_tracker_ros2 --cmake-args -DOPENVR_ROOT=/pat
 `OPENVR_ROOT` must contain `openvr.h` under `headers/` or `include/`, and
 `libopenvr_api.so` under `lib/`, `lib64/`, `bin/linux64/`, or `lib/linux64/`.
 
+For SteamVR 2.x input actions, use a matching recent Valve SDK instead of the
+Ubuntu 22.04 OpenVR 1.12 package:
+
+```bash
+cd ~/code/teach_pen_ws
+git clone --depth 1 --branch v2.15.6 \
+  https://github.com/ValveSoftware/openvr.git third_party/openvr
+colcon build --packages-select vive_tracker_ros2 --cmake-force-configure
+```
+
+When `third_party/openvr` exists, this package prefers its matching header and
+library and installs the OpenVR library beside the node executable.
+
 ## Run
 
 Start SteamVR first, make sure the Vive Tracker 3.0 is paired and tracking, then:
@@ -47,7 +60,7 @@ The button topics use `sensor_msgs/msg/Joy`. `buttons` are ordered as:
 ```text
 buttons[0] = trigger
 buttons[1] = grip
-buttons[2] = trackpad
+buttons[2] = thumb
 buttons[3] = menu
 ```
 
@@ -75,6 +88,9 @@ update_rate_hz           default: 100.0
 publish_tf               default: true
 publish_first_pose_topic default: true
 debug_devices            default: false, print connected OpenVR devices every 2 seconds
+debug_events             default: false, print legacy events and action states
+enable_action_input      default: false, experimental OpenVR IVRInput action API
+action_manifest_path     default: installed config/actions.json
 ```
 
 Example for one known tracker serial:
