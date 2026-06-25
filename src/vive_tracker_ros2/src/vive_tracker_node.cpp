@@ -273,6 +273,24 @@ std::string applicationErrorToString(vr::EVRApplicationError error)
   return error_name == nullptr ? "unknown" : error_name;
 }
 
+std::string controllerRoleToString(vr::ETrackedControllerRole role)
+{
+  switch (role) {
+    case vr::TrackedControllerRole_LeftHand:
+      return "LeftHand";
+    case vr::TrackedControllerRole_RightHand:
+      return "RightHand";
+    case vr::TrackedControllerRole_OptOut:
+      return "OptOut";
+    case vr::TrackedControllerRole_Treadmill:
+      return "Treadmill";
+    case vr::TrackedControllerRole_Stylus:
+      return "Stylus";
+    default:
+      return "Invalid";
+  }
+}
+
 }  // namespace
 
 class ViveTrackerNode : public rclcpp::Node
@@ -291,6 +309,7 @@ public:
     m_debug_devices = declare_parameter<bool>("debug_devices", false);
     m_debug_events = declare_parameter<bool>("debug_events", false);
     m_enable_action_input = declare_parameter<bool>("enable_action_input", false);
+    m_open_binding_ui = declare_parameter<bool>("open_binding_ui", false);
     m_action_manifest_path = declare_parameter<std::string>("action_manifest_path", "");
     m_application_manifest_path =
       declare_parameter<std::string>("application_manifest_path", "");
@@ -307,9 +326,6 @@ public:
               std::string("Failed to initialize OpenVR: ") +
               (error_name == nullptr ? "unknown error" : error_name));
     }
-
-    identifyOpenVrApplication();
-    initializeActionInput();
 
     if (m_publish_tf) {
       m_tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
@@ -345,6 +361,7 @@ public:
 private:
   void pollTrackers()
   {
+    maybeInitializeActionInput();
     pollOpenVrEvents();
     auto action_buttons = pollActionButtons();
 
@@ -420,6 +437,40 @@ private:
         }
       }
     }
+  }
+
+  void maybeInitializeActionInput()
+  {
+    if (!m_enable_action_input || m_action_input_ready || m_action_init_attempted) {
+      return;
+    }
+
+    for (vr::TrackedDeviceIndex_t index = 0; index < vr::k_unMaxTrackedDeviceCount; ++index) {
+      if (!m_vr_system->IsTrackedDeviceConnected(index)) {
+        continue;
+      }
+
+      const auto role = m_vr_system->GetControllerRoleForTrackedDeviceIndex(index);
+      if (role != vr::TrackedControllerRole_LeftHand &&
+        role != vr::TrackedControllerRole_RightHand)
+      {
+        continue;
+      }
+
+      m_action_init_attempted = true;
+      m_action_input_source_path =
+        role == vr::TrackedControllerRole_LeftHand ? "/user/hand/left" : "/user/hand/right";
+      RCLCPP_INFO(
+        get_logger(), "Tracker input role is ready: index=%u role=%s source=%s",
+        index, controllerRoleToString(role).c_str(), m_action_input_source_path.c_str());
+      identifyOpenVrApplication();
+      initializeActionInput();
+      return;
+    }
+
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "Waiting for SteamVR to assign the Tracker a LeftHand/RightHand input role");
   }
 
   void identifyOpenVrApplication()
@@ -498,6 +549,15 @@ private:
       return;
     }
 
+    error = input->GetInputSourceHandle(
+      m_action_input_source_path.c_str(), &m_action_input_source);
+    if (error != vr::VRInputError_None) {
+      RCLCPP_WARN(
+        get_logger(), "failed to get input source %s: %s (%d)",
+        m_action_input_source_path.c_str(), inputErrorToString(error).c_str(), error);
+      return;
+    }
+
     const std::array<std::pair<const char *, vr::VRActionHandle_t *>, 4> actions{{
       {"/actions/teach_pen/in/sample", &m_trigger_action},
       {"/actions/teach_pen/in/grip", &m_grip_action},
@@ -523,6 +583,84 @@ private:
       get_logger(), "OpenVR action input initialized from %s, action_set=%llu",
       m_action_manifest_path.c_str(),
       static_cast<unsigned long long>(m_action_set));
+
+    if (m_open_binding_ui) {
+      const auto ui_error = input->OpenBindingUI(
+        m_openvr_app_key.c_str(), m_action_set, m_action_input_source, true);
+      if (ui_error != vr::VRInputError_None) {
+        RCLCPP_WARN(
+          get_logger(), "failed to open SteamVR binding UI: %s (%d)",
+          inputErrorToString(ui_error).c_str(), ui_error);
+      } else {
+        RCLCPP_INFO(get_logger(), "SteamVR binding UI opened on the desktop");
+      }
+    }
+  }
+
+  void logActionOrigins(const char * action_name, vr::VRActionHandle_t action_handle)
+  {
+    std::array<vr::InputBindingInfo_t, 8> bindings{};
+    uint32_t binding_count = 0;
+    const auto binding_error = vr::VRInput()->GetActionBindingInfo(
+      action_handle, bindings.data(), sizeof(bindings.front()), bindings.size(), &binding_count);
+    if (binding_error == vr::VRInputError_None) {
+      for (uint32_t index = 0; index < binding_count; ++index) {
+        const auto & binding = bindings[index];
+        RCLCPP_INFO(
+          get_logger(),
+          "OpenVR action %s binding device=%s input=%s mode=%s slot=%s source=%s",
+          action_name,
+          binding.rchDevicePathName,
+          binding.rchInputPathName,
+          binding.rchModeName,
+          binding.rchSlotName,
+          binding.rchInputSourceType);
+      }
+    } else {
+      RCLCPP_WARN(
+        get_logger(), "failed to get binding info for %s: %s (%d)",
+        action_name, inputErrorToString(binding_error).c_str(), binding_error);
+    }
+
+    std::array<vr::VRInputValueHandle_t, 8> origins{};
+    const auto error = vr::VRInput()->GetActionOrigins(
+      m_action_set, action_handle, origins.data(), origins.size());
+    if (error != vr::VRInputError_None) {
+      RCLCPP_WARN(
+        get_logger(), "failed to get origins for %s: %s (%d)",
+        action_name, inputErrorToString(error).c_str(), error);
+      return;
+    }
+
+    bool found_origin = false;
+    for (const auto origin : origins) {
+      if (origin == vr::k_ulInvalidInputValueHandle) {
+        continue;
+      }
+
+      vr::InputOriginInfo_t info{};
+      const auto info_error = vr::VRInput()->GetOriginTrackedDeviceInfo(
+        origin, &info, sizeof(info));
+      if (info_error != vr::VRInputError_None) {
+        continue;
+      }
+
+      found_origin = true;
+      const auto serial = info.trackedDeviceIndex < vr::k_unMaxTrackedDeviceCount ?
+        getTrackedDeviceString(
+        m_vr_system, info.trackedDeviceIndex, vr::Prop_SerialNumber_String) :
+        std::string{};
+      RCLCPP_INFO(
+        get_logger(), "OpenVR action %s origin index=%u serial=%s component=%s",
+        action_name,
+        info.trackedDeviceIndex,
+        serial.empty() ? "<unknown>" : serial.c_str(),
+        info.rchRenderModelComponentName);
+    }
+
+    if (!found_origin) {
+      RCLCPP_WARN(get_logger(), "OpenVR action %s has no bound origin", action_name);
+    }
   }
 
   std::optional<sensor_msgs::msg::Joy> pollActionButtons()
@@ -533,6 +671,7 @@ private:
 
     vr::VRActiveActionSet_t active_set{};
     active_set.ulActionSet = m_action_set;
+    active_set.ulRestrictedToDevice = m_action_input_source;
     const auto update_error = vr::VRInput()->UpdateActionState(
       &active_set, sizeof(active_set), 1);
     if (update_error != vr::VRInputError_None) {
@@ -541,6 +680,14 @@ private:
         "OpenVR UpdateActionState failed: %s (%d)",
         inputErrorToString(update_error).c_str(), update_error);
       return std::nullopt;
+    }
+
+    if (!m_logged_runtime_action_bindings) {
+      m_logged_runtime_action_bindings = true;
+      logActionOrigins("/actions/teach_pen/in/sample", m_trigger_action);
+      logActionOrigins("/actions/teach_pen/in/grip", m_grip_action);
+      logActionOrigins("/actions/teach_pen/in/thumb", m_thumb_action);
+      logActionOrigins("/actions/teach_pen/in/menu", m_menu_action);
     }
 
     const std::array<std::pair<const char *, vr::VRActionHandle_t>, 4> actions{{
@@ -557,7 +704,7 @@ private:
         actions[index].second,
         &states[index],
         sizeof(states[index]),
-        vr::k_ulInvalidInputValueHandle);
+        m_action_input_source);
       if (error != vr::VRInputError_None) {
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
@@ -606,6 +753,11 @@ private:
 
   void pollOpenVrEvents()
   {
+    // SetActionManifestPath 必须早于第一次 PollNextEvent。
+    if (m_enable_action_input && !m_action_input_ready) {
+      return;
+    }
+
     vr::VREvent_t event{};
     while (m_vr_system->PollNextEvent(&event, sizeof(event))) {
       if (!m_debug_events) {
@@ -677,6 +829,12 @@ private:
         m_vr_system, index, vr::Prop_SerialNumber_String);
       const std::string model = getTrackedDeviceString(
         m_vr_system, index, vr::Prop_ModelNumber_String);
+      const std::string input_profile = getTrackedDeviceString(
+        m_vr_system, index, vr::Prop_InputProfilePath_String);
+      const std::string registered_device_type = getTrackedDeviceString(
+        m_vr_system, index, vr::Prop_RegisteredDeviceType_String);
+      const auto controller_role =
+        m_vr_system->GetControllerRoleForTrackedDeviceIndex(index);
       vr::VRControllerState_t controller_state{};
       const bool has_controller_state =
         m_vr_system->GetControllerState(index, &controller_state, sizeof(controller_state));
@@ -685,6 +843,11 @@ private:
              << " serial=" << (serial.empty() ? "<empty>" : serial)
              << " model=" << (model.empty() ? "<empty>" : model)
              << " class=" << trackedDeviceClassToString(device_class)
+             << " role=" << controllerRoleToString(controller_role)
+             << " input_profile="
+             << (input_profile.empty() ? "<empty>" : input_profile)
+             << " registered_device="
+             << (registered_device_type.empty() ? "<empty>" : registered_device_type)
              << " connected=" << (pose.bDeviceIsConnected ? "true" : "false")
              << " pose_valid=" << (pose.bPoseIsValid ? "true" : "false")
              << " tracking_result=" << trackingResultToString(pose.eTrackingResult)
@@ -776,11 +939,16 @@ private:
   bool m_debug_devices{false};
   bool m_debug_events{false};
   bool m_enable_action_input{false};
+  bool m_open_binding_ui{false};
   bool m_action_input_ready{false};
+  bool m_action_init_attempted{false};
+  bool m_logged_runtime_action_bindings{false};
   std::string m_action_manifest_path;
+  std::string m_action_input_source_path;
   std::string m_application_manifest_path;
   const std::string m_openvr_app_key{"com.teach_pen.vive_tracker_ros2"};
   vr::VRActionSetHandle_t m_action_set{vr::k_ulInvalidActionSetHandle};
+  vr::VRInputValueHandle_t m_action_input_source{vr::k_ulInvalidInputValueHandle};
   vr::VRActionHandle_t m_trigger_action{vr::k_ulInvalidActionHandle};
   vr::VRActionHandle_t m_grip_action{vr::k_ulInvalidActionHandle};
   vr::VRActionHandle_t m_thumb_action{vr::k_ulInvalidActionHandle};

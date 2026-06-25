@@ -5,7 +5,7 @@
     "/actions/teach_pen": {
       "sources": [
         {
-          "path": "/user/vive_tracker_htcx/role/handed/input/trigger",
+          "path": "/user/vive_tracker_htcx/role/handheld_object/input/trigger",
           "mode": "button",
           "inputs": {
             "click": {
@@ -14,7 +14,7 @@
           }
         },
         {
-          "path": "/user/vive_tracker_htcx/role/handed/input/grip",
+          "path": "/user/vive_tracker_htcx/role/handheld_object/input/grip",
           "mode": "button",
           "inputs": {
             "click": {
@@ -23,7 +23,7 @@
           }
         },
         {
-          "path": "/user/vive_tracker_htcx/role/handed/input/thumb",
+          "path": "/user/vive_tracker_htcx/role/handheld_object/input/thumb",
           "mode": "button",
           "inputs": {
             "click": {
@@ -32,7 +32,7 @@
           }
         },
         {
-          "path": "/user/vive_tracker_htcx/role/handed/input/application_menu",
+          "path": "/user/vive_tracker_htcx/role/handheld_object/input/application_menu",
           "mode": "button",
           "inputs": {
             "click": {

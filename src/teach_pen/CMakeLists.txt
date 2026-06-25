@@ -14,7 +14,9 @@ find_package(sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(moveit_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
+find_package(moveit_core REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common filters segmentation)
 
@@ -39,9 +41,23 @@ ament_target_dependencies(seam_perception_node
 )
 target_link_libraries(seam_perception_node ${PCL_LIBRARIES})
 
+add_executable(replay_path_node src/replay_path_node.cpp)
+ament_target_dependencies(replay_path_node
+  rclcpp
+  geometry_msgs
+  sensor_msgs
+  tf2_ros
+  tf2_geometry_msgs
+  moveit_msgs
+  moveit_ros_planning_interface
+  moveit_core
+)
+target_link_libraries(replay_path_node yaml-cpp)
+
 install(TARGETS
   collect_path_node
   seam_perception_node
+  replay_path_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

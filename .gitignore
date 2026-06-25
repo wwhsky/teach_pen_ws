@@ -33,3 +33,4 @@ core.*
 
 # Locally downloaded third-party SDKs
 third_party/openvr/
+third_party/libsurvive/

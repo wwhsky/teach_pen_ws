@@ -1,41 +1,65 @@
 # vive_tracker_ros2
 
-ROS 2 node for reading HTC Vive Tracker poses from SteamVR/OpenVR and publishing
-them as `geometry_msgs/msg/PoseStamped` plus optional TF transforms.
+ROS 2 nodes for reading HTC Vive Tracker poses and buttons.
+
+The default launch uses `libsurvive` directly, without SteamVR:
+
+```text
+Tracker -> USB Dongle -> libsurvive -> ROS 2 Pose/Joy/TF
+```
+
+The original OpenVR node is retained as `vive_tracker_node` for comparison.
 
 ## Dependencies
 
-On Ubuntu, install the OpenVR development package:
+Build the workspace-local `libsurvive`:
 
 ```bash
-sudo apt-get install libopenvr-dev libopenvr-api1
-```
+sudo apt install build-essential cmake libusb-1.0-0-dev libjson-c-dev libeigen3-dev
 
-If OpenVR is installed somewhere else, pass its root directory while building:
-
-```bash
-colcon build --packages-select vive_tracker_ros2 --cmake-args -DOPENVR_ROOT=/path/to/openvr
-```
-
-`OPENVR_ROOT` must contain `openvr.h` under `headers/` or `include/`, and
-`libopenvr_api.so` under `lib/`, `lib64/`, `bin/linux64/`, or `lib/linux64/`.
-
-For SteamVR 2.x input actions, use a matching recent Valve SDK instead of the
-Ubuntu 22.04 OpenVR 1.12 package:
-
-```bash
 cd ~/code/teach_pen_ws
-git clone --depth 1 --branch v2.15.6 \
-  https://github.com/ValveSoftware/openvr.git third_party/openvr
-colcon build --packages-select vive_tracker_ros2 --cmake-force-configure
+git clone https://github.com/cntools/libsurvive.git third_party/libsurvive
+touch third_party/libsurvive/COLCON_IGNORE
+cmake -S third_party/libsurvive \
+  -B third_party/libsurvive/build-local \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DUSE_OPENBLAS=OFF \
+  -DUSE_OPENCV=OFF \
+  -DBUILD_GATT_SUPPORT=OFF
+cmake --build third_party/libsurvive/build-local --parallel
+colcon build --packages-select vive_tracker_ros2
 ```
 
-When `third_party/openvr` exists, this package prefers its matching header and
-library and installs the OpenVR library beside the node executable.
+If direct USB access requires `sudo`, install the included udev rule:
+
+```bash
+sudo cp third_party/libsurvive/useful_files/81-vive.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+OpenVR is optional. If its headers and library are available, the legacy
+SteamVR node is built too:
+
+```bash
+sudo apt install libopenvr-dev libopenvr-api1
+```
 
 ## Run
 
-Start SteamVR first, make sure the Vive Tracker 3.0 is paired and tracking, then:
+Completely exit SteamVR because it competes with `libsurvive` for the Dongle.
+For two Lighthouse 1.0 base stations, use `b/c` mode.
+
+First calibration:
+
+```bash
+cd ~/code/teach_pen_ws
+source install/setup.bash
+ros2 launch vive_tracker_ros2 vive_tracker.launch.py force_calibrate:=true
+```
+
+Keep the Tracker stationary and visible to both base stations until
+`MPFIT success` appears. Normal startup after calibration:
 
 ```bash
 ros2 launch vive_tracker_ros2 vive_tracker.launch.py
@@ -48,71 +72,75 @@ The node publishes:
 /vive_tracker/<serial>/pose
 /vive_tracker/buttons
 /vive_tracker/<serial>/buttons
+/vive_tracker/visibility
 /tf: steamvr_base -> tracker_frame
 ```
 
-`/vive_tracker/pose` is the first valid tracker seen in each polling cycle.
-Per-device topics use a sanitized tracker serial number. The TF child frame is
-fixed to `tracker_frame` for the current single-tracker setup.
+`/vive_tracker/visibility` publishes:
 
-The button topics use `sensor_msgs/msg/Joy`. `buttons` are ordered as:
+```text
+[visible_lighthouses, total_measurements, lh0_x, lh0_y, lh1_x, lh1_y]
+```
+
+The final four values are recent valid optical measurements for each
+Lighthouse and scan axis.
+
+The button topics use `sensor_msgs/msg/Joy`:
 
 ```text
 buttons[0] = trigger
 buttons[1] = grip
-buttons[2] = thumb
+buttons[2] = thumb/trackpad
 buttons[3] = menu
-```
 
-`axes` are ordered as:
-
-```text
 axes[0] = trackpad x
 axes[1] = trackpad y
 axes[2] = trigger raw
 ```
 
-Button states are published when the tracker is connected, even if the tracker
-pose is not valid yet. This is useful for pogo-pin short tests before the base
-stations arrive.
+Button events come directly from Watchman/Dongle packets and do not require a
+valid optical pose.
 
-## Useful Parameters
+## Parameters
 
 ```text
 frame_id                 default: steamvr_base
 child_frame_id           default: tracker_frame
 topic_prefix             default: /vive_tracker
-device_serial            default: empty, publish all trackers
-tracking_universe        default: standing, options: standing, seated, raw
-update_rate_hz           default: 100.0
+device_serial            default: empty, first Tracker is primary
 publish_tf               default: true
 publish_first_pose_topic default: true
-debug_devices            default: false, print connected OpenVR devices every 2 seconds
-debug_events             default: false, print legacy events and action states
-enable_action_input      default: false, experimental OpenVR IVRInput action API
-action_manifest_path     default: installed config/actions.json
+debug_events             default: false
+lighthouse_count         default: 2
+lighthouse_generation    default: 1
+center_on_lighthouse     default: true
+force_calibrate          default: false
+use_raw_observation      default: false, publish raw MPFIT optical observations
+libsurvive_verbosity     default: 1
+poll_rate_hz             default: 250.0
+config_file              default: empty, use libsurvive XDG config
 ```
 
-Example for one known tracker serial:
+Useful commands:
 
 ```bash
-ros2 launch vive_tracker_ros2 vive_tracker.launch.py device_serial:=LHR-XXXXXXX
-```
-
-Debug connected OpenVR devices, even when the tracker pose is not valid yet:
-
-```bash
-ros2 launch vive_tracker_ros2 vive_tracker.launch.py tracking_universe:=raw debug_devices:=true
-```
-
-Watch button state:
-
-```bash
+ros2 topic echo /vive_tracker/pose
 ros2 topic echo /vive_tracker/buttons
+ros2 topic echo /vive_tracker/visibility
+ros2 run tf2_ros tf2_echo steamvr_base tracker_frame
 ```
 
-Query TF:
+Use raw optical observations for calibration or precise point sampling:
 
 ```bash
-ros2 run tf2_ros tf2_echo steamvr_base tracker_frame
+ros2 launch vive_tracker_ros2 vive_tracker.launch.py use_raw_observation:=true
+```
+
+Raw observations avoid IMU integration drift, but update less smoothly and stop
+when there is no valid Lighthouse solution.
+
+Run the retained OpenVR implementation directly:
+
+```bash
+ros2 run vive_tracker_ros2 vive_tracker_node
 ```
