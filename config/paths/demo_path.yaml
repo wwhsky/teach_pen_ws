@@ -1,0 +1,19 @@
+base_frame: robot_base
+tip_frame: welding_torch_tip
+sample_count: 3
+
+samples:
+  - index: 0
+    stamp_sec: 0.0
+    translation: [0.35, 0.00, 0.30]
+    rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+
+  - index: 1
+    stamp_sec: 1.0
+    translation: [0.38, 0.00, 0.30]
+    rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+
+  - index: 2
+    stamp_sec: 2.0
+    translation: [0.42, 0.00, 0.30]
+    rotation_xyzw: [0.0, 0.0, 0.0, 1.0]

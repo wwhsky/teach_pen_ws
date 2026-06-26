@@ -8,6 +8,8 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(control_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -19,6 +21,9 @@ find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_core REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common filters segmentation)
+
+set(JAKA_PLANNER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../jaka_ros2/src/jaka_planner)
+set(JAKA_SDK_LIBRARY ${JAKA_PLANNER_DIR}/lib/libjakaAPI.so)
 
 add_executable(collect_path_node src/collect_path_node.cpp)
 ament_target_dependencies(collect_path_node
@@ -54,10 +59,25 @@ ament_target_dependencies(replay_path_node
 )
 target_link_libraries(replay_path_node yaml-cpp)
 
+add_executable(jaka_trajectory_executor_node src/jaka_trajectory_executor_node.cpp)
+target_include_directories(jaka_trajectory_executor_node PRIVATE
+  ${JAKA_PLANNER_DIR}/include
+)
+ament_target_dependencies(jaka_trajectory_executor_node
+  rclcpp
+  rclcpp_action
+  control_msgs
+  sensor_msgs
+)
+target_link_libraries(jaka_trajectory_executor_node
+  ${JAKA_SDK_LIBRARY}
+)
+
 install(TARGETS
   collect_path_node
   seam_perception_node
   replay_path_node
+  jaka_trajectory_executor_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
