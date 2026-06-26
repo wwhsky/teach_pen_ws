@@ -85,9 +85,19 @@ public:
     const bool center_on_lighthouse = declare_parameter<bool>("center_on_lighthouse", true);
     const bool force_calibrate = declare_parameter<bool>("force_calibrate", false);
     const bool use_raw_observation = declare_parameter<bool>("use_raw_observation", false);
+    const int globalscenesolver = declare_parameter<int>("globalscenesolver", 1);
+    const int use_stationary_sensor_window =
+      declare_parameter<int>("use_stationary_sensor_window", 1);
+    const std::string poser = declare_parameter<std::string>("poser", "");
+    const bool precise = declare_parameter<bool>("precise", false);
     const int verbosity = declare_parameter<int>("libsurvive_verbosity", 1);
     const double poll_rate_hz = declare_parameter<double>("poll_rate_hz", 250.0);
+    const double visibility_tolerance_ms = declare_parameter<double>("visibility_tolerance_ms", 0.0);
     const std::string config_file = declare_parameter<std::string>("config_file", "");
+    if (visibility_tolerance_ms > 0.0) {
+      m_visibility_tolerance_ticks =
+        static_cast<survive_long_timecode>(visibility_tolerance_ms * 48000.0);
+    }
 
     m_first_pose_publisher =
       create_publisher<geometry_msgs::msg::PoseStamped>(m_topic_prefix + "/pose", 10);
@@ -100,8 +110,17 @@ public:
       "vive_tracker_libsurvive",
       "-l", std::to_string(lighthouse_count),
       "--lighthouse-gen", std::to_string(lighthouse_generation),
+      "--globalscenesolver", std::to_string(globalscenesolver),
+      "--use-stationary-sensor-window", std::to_string(use_stationary_sensor_window),
       "--v", std::to_string(verbosity),
     };
+    if (!poser.empty()) {
+      arguments.emplace_back("-p");
+      arguments.emplace_back(poser);
+    }
+    if (precise) {
+      arguments.emplace_back("--precise");
+    }
     if (center_on_lighthouse) {
       arguments.emplace_back("--center-on-lh0");
     }
@@ -110,6 +129,8 @@ public:
     }
     if (use_raw_observation) {
       arguments.emplace_back("--use-raw-obs");
+      arguments.emplace_back("--use-kalman");
+      arguments.emplace_back("0");
     }
     if (!config_file.empty()) {
       arguments.emplace_back("-c");
@@ -136,9 +157,12 @@ public:
     RCLCPP_INFO(
       get_logger(),
       "libsurvive initialized: lighthouses=%d generation=%d center_on_lighthouse=%s "
-      "force_calibrate=%s use_raw_observation=%s",
+      "force_calibrate=%s use_raw_observation=%s globalscenesolver=%d "
+      "use_stationary_sensor_window=%d poser=%s precise=%s visibility_tolerance_ms=%.3f",
       lighthouse_count, lighthouse_generation, center_on_lighthouse ? "true" : "false",
-      force_calibrate ? "true" : "false", use_raw_observation ? "true" : "false");
+      force_calibrate ? "true" : "false", use_raw_observation ? "true" : "false",
+      globalscenesolver, use_stationary_sensor_window, poser.empty() ? "default" : poser.c_str(),
+      precise ? "true" : "false", visibility_tolerance_ms);
   }
 
   ~LibsurviveTrackerNode() override
@@ -280,7 +304,7 @@ private:
     SurviveObject * survive_object = survive_simple_get_survive_object(object);
     if (survive_object != nullptr) {
       SurviveSensorActivations_valid_counts(
-        &survive_object->activations, 0, &measurement_count, &lighthouse_count,
+        &survive_object->activations, m_visibility_tolerance_ticks, &measurement_count, &lighthouse_count,
         &axis_count, measurements_per_axis.data());
     }
     survive_simple_unlock(m_context);
@@ -437,6 +461,7 @@ private:
   bool m_publish_tf{true};
   bool m_publish_first_pose_topic{true};
   bool m_debug_events{false};
+  survive_long_timecode m_visibility_tolerance_ticks{0};
 
   PosePublisher::SharedPtr m_first_pose_publisher;
   ButtonPublisher::SharedPtr m_first_button_publisher;

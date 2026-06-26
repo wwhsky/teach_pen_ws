@@ -6,7 +6,6 @@
 #include "moveit_msgs/moveit_msgs/msg/display_trajectory.hpp"   
 #include "moveit_msgs/moveit_msgs/msg/attached_collision_object.hpp"  
 #include "moveit_msgs/moveit_msgs/msg/collision_object.hpp"  
-#include "moveit_visual_tools/moveit_visual_tools.h"
 
 #include <moveit_msgs/moveit_msgs/msg/joint_limits.hpp>
 #include <moveit/robot_state/robot_state.h>

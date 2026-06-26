@@ -81,9 +81,24 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(DIRECTORY config
+install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
+
+install(DIRECTORY rviz
+  DESTINATION share/${PROJECT_NAME}
+)
+
+set(TEACH_PEN_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/config")
+if(NOT EXISTS "${TEACH_PEN_CONFIG_DIR}")
+  set(TEACH_PEN_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../config")
+endif()
+
+if(EXISTS "${TEACH_PEN_CONFIG_DIR}")
+  install(DIRECTORY "${TEACH_PEN_CONFIG_DIR}/"
+    DESTINATION share/${PROJECT_NAME}
+  )
+endif()
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

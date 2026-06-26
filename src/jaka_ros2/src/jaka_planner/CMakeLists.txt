@@ -21,7 +21,6 @@ find_package(moveit_msgs REQUIRED)
 find_package(action_msgs REQUIRED)
 find_package(control_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
-find_package(moveit_visual_tools REQUIRED)
 find_package(moveit_core REQUIRED)
 
 
@@ -53,7 +52,6 @@ ament_target_dependencies(moveit_test
   moveit_msgs
   action_msgs
   moveit_ros_planning_interface
-  moveit_visual_tools
   moveit_core
 )
 
@@ -62,7 +60,6 @@ ament_target_dependencies(moveit_test
 #   ${moveit_msgs_INCLUDE_DIRS}  # Include moveit_msgs headers
 #   ${moveit_core_INCLUDE_DIRS}           # Make sure this is added
 #   ${moveit_ros_planning_interface_INCLUDE_DIRS}
-#   ${moveit_visual_tools_INCLUDE_DIRS}
 #   # $ENV{HOME}/moveit-ros2/install/moveit_core/include
 # )
 
@@ -70,7 +67,6 @@ target_link_libraries(moveit_test
   ${moveit_msgs_LIBRARIES}
   ${moveit_ros_planning_interface_LIBRARIES}
   ${moveit_core_LIBRARIES}
-  ${moveit_visual_tools_LIBRARIES}
 )
 
 # For including directories in ROS 2
@@ -86,7 +82,6 @@ target_include_directories(moveit_test
     ${moveit_core_INCLUDE_DIRS}  # Include the moveit_core include directory
     $ENV{HOME}/moveit-ros2/install/moveit_core/include
     ${moveit_ros_planning_interface_INCLUDE_DIRS}
-    ${moveit_visual_tools_INCLUDE_DIRS}
 )
 
 # Specify where to find external libraries

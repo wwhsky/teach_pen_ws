@@ -21,7 +21,7 @@ public:
   JakaTrajectoryExecutorNode()
   : Node("jaka_trajectory_executor_node")
   {
-    m_robot_ip = declare_parameter<std::string>("ip", "10.5.5.100");
+    m_robot_ip = declare_parameter<std::string>("ip", "192.168.1.100");
     m_model = declare_parameter<std::string>("model", "zu5");
     m_publish_rate = declare_parameter<double>("joint_state_publish_rate", 125.0);
     m_servo_period = declare_parameter<double>("servo_period", 0.008);
