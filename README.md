@@ -1,9 +1,10 @@
 # Teach Pen Workspace
 
-这个工作空间目前主要包含三部分：
+这个工作空间目前主要包含四部分：
 
 - `vive_tracker_ros2`：通过 OpenVR/SteamVR 读取 Vive Tracker 位姿，并发布 ROS2 topic / TF。
 - `calibration`：用于标定 `steamvr_base`、`tracker_frame`、`teaching_pen_tip`、`welding_torch_tip`、`workpiece_frame` 等坐标关系。
+- `teach_pen`：项目自己的业务包，包含示教路径采集、路径回放、焊缝感知和 JAKA 轨迹执行节点。
 - `jaka_ros2`：JAKA 机械臂的描述、MoveIt 配置、仿真和实机接口。
 
 ## MoveIt 和执行端的关系
@@ -121,9 +122,193 @@ MoveIt
 
 Gazebo 适合测试机器人和工件、环境之间的空间关系，也方便后续加入工件模型。
 
+## teach_pen 节点
+
+当前 `teach_pen` 包里主要有这些节点：
+
+```text
+collect_path_node
+seam_perception_node
+replay_path_node
+jaka_trajectory_executor_node
+```
+
+### collect_path_node
+
+用于从示教笔采样路径。它从键盘读取控制命令，查询 TF 中的笔尖位姿，并保存为 YAML。
+
+运行示例：
+
+```bash
+cd ~/code/teach_pen_ws
+source install/setup.bash
+ros2 run teach_pen collect_path_node
+```
+
+键盘控制：
+
+```text
+Space  采样一个点
+r      开关连续采样
+u      撤销最后一个点
+s      保存 YAML
+q      退出节点
+```
+
+默认输出路径：
+
+```text
+config/paths/demo_path.yaml
+```
+
+路径 YAML 的基本格式：
+
+```yaml
+base_frame: robot_base
+tip_frame: welding_torch_tip
+sample_count: 3
+
+samples:
+  - index: 0
+    stamp_sec: 0.0
+    translation: [0.35, 0.00, 0.30]
+    rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+```
+
+其中 `translation` 单位为米，`rotation_xyzw` 为四元数，顺序是
+`x, y, z, w`。
+
+### replay_path_node
+
+用于读取路径 YAML，并通过 MoveIt 回放路径。
+
+当前流程：
+
+```text
+读取 samples
+-> 检查采样点是否为空
+-> 先规划并移动到第一个采样点
+-> computeCartesianPath 生成笛卡尔路径
+-> IterativeParabolicTimeParameterization 补时间/速度/加速度
+-> execute 发送给 MoveIt 当前 controller
+```
+
+运行示例：
+
+```bash
+cd ~/code/teach_pen_ws
+source install/setup.bash
+ros2 run teach_pen replay_path_node --ros-args \
+  -p model:=zu5 \
+  -p input_file:=config/paths/demo_path.yaml
+```
+
+注意：`demo_path.yaml` 中的点会被 MoveIt 当作当前 planning frame 下的
+TCP 位姿。如果坐标系或姿态不合理，可能出现不可达、IK 失败或碰撞失败。
+
+### seam_perception_node
+
+用于处理 ROI 点云并提取焊缝线。当前实现思路是：
+
+```text
+输入 ROI 点云
+-> 分割两个平面
+-> 计算两平面交线
+-> 根据交线附近真实点云支持范围裁剪起点和终点
+-> 输出 measured_path
+```
+
+当前主要用于验证角焊缝/交线类焊缝的点云提取流程。
+
+### jaka_trajectory_executor_node
+
+这是项目新增的 JAKA 实机轨迹执行节点，用来替代或对照官方
+`jaka_planner/moveit_server.cpp`。
+
+它的职责：
+
+```text
+连接 JAKA SDK
+发布 /joint_states
+提供 /jaka_zu5_controller/follow_joint_trajectory
+接收 MoveIt 发来的 JointTrajectory
+逐点调用 JAKA SDK servo_j 执行
+```
+
+运行示例：
+
+```bash
+cd ~/code/teach_pen_ws
+source install/setup.bash
+ros2 run teach_pen jaka_trajectory_executor_node --ros-args \
+  -p ip:=<机械臂IP> \
+  -p model:=zu5
+```
+
+启动后可以检查：
+
+```bash
+ros2 action list | grep trajectory
+ros2 topic echo /joint_states --once
+```
+
+应该能看到：
+
+```text
+/jaka_zu5_controller/follow_joint_trajectory
+```
+
+这个节点当前是第一版执行器，已经具备基本轨迹接收和 SDK 执行能力。后续
+还需要继续加强取消、急停、错误码处理、轨迹时间检查和限速保护。
+
 ## 实机执行
 
-实机链路由 `jaka_planner` 里的 `moveit_server` 接 MoveIt 轨迹，再通过 JAKA SDK 发给机械臂。
+实机执行有两条路线。
+
+### 路线 A：使用项目自己的 executor
+
+推荐后续项目主线使用这个方式：
+
+```bash
+cd ~/code/teach_pen_ws
+source install/setup.bash
+ros2 run teach_pen jaka_trajectory_executor_node --ros-args \
+  -p ip:=<机械臂IP> \
+  -p model:=zu5
+```
+
+再启动 MoveIt / RViz：
+
+```bash
+cd ~/code/teach_pen_ws
+source install/setup.bash
+ros2 launch jaka_zu5_moveit_config demo.launch.py
+```
+
+链路：
+
+```text
+RViz / replay_path_node
+-> MoveIt move_group
+-> /jaka_zu5_controller/follow_joint_trajectory
+-> teach_pen/jaka_trajectory_executor_node
+-> JAKA SDK servo_j()
+-> 真实机械臂
+```
+
+实机模式下不要同时启动：
+
+```bash
+ros2 launch jaka_zu5_moveit_config demo.launch.py use_rviz_sim:=true
+```
+
+因为 `use_rviz_sim:=true` 会启动 fake ros2_control，可能和实机 executor
+抢 `/joint_states` 和 trajectory action。
+
+### 路线 B：使用 JAKA 官方 moveit_server
+
+官方实机链路由 `jaka_planner` 里的 `moveit_server` 接 MoveIt 轨迹，再通过
+JAKA SDK 发给机械臂。
 
 启动实机 server：
 
@@ -141,18 +326,7 @@ source install/setup.bash
 ros2 launch jaka_zu5_moveit_config demo.launch.py
 ```
 
-链路：
-
-```text
-RViz / moveit_test
--> MoveIt move_group
--> /jaka_zu5_controller/follow_joint_trajectory
--> jaka_planner/moveit_server.cpp
--> JAKA SDK servo_j()
--> 真实机械臂
-```
-
-`moveit_server.cpp` 中对应的 action server 创建位置：
+`moveit_server.cpp` 中 action server 创建位置：
 
 ```cpp
 "/jaka_" + robot_model + "_controller/follow_joint_trajectory"
@@ -171,6 +345,10 @@ model:=zu5
 ```
 
 这正好和 MoveIt 的控制器配置对上。
+
+官方 `moveit_server.cpp` 更像 demo：取消、停止、错误处理和轨迹时间控制都
+比较粗糙。可以作为参考，但最终项目建议逐步切到
+`jaka_trajectory_executor_node`。
 
 ## 如何确认当前接的是谁
 
@@ -194,7 +372,8 @@ ros2 node list
 
 大致判断：
 
-- 看到 `moveit_server`：大概率是 JAKA 实机链路。
+- 看到 `jaka_trajectory_executor_node`：大概率是项目自己的 JAKA 实机链路。
+- 看到 `moveit_server`：大概率是 JAKA 官方实机链路。
 - 看到 `controller_manager` / `joint_trajectory_controller`：大概率是 fake ros2_control 或 Gazebo 链路。
 
 ## moveit_test 为什么能让 RViz 动
@@ -211,7 +390,7 @@ ros2 run jaka_planner moveit_test --ros-args -p model:=zu5
 
 如果当前有 Gazebo controller，Gazebo 里的模型会动。
 
-如果当前有 `moveit_server` 连着真机，真实机械臂会动。
+如果当前有 `moveit_server` 或 `jaka_trajectory_executor_node` 连着真机，真实机械臂会动。
 
 所以它不是直接控制 RViz，而是通过 MoveIt 走同一套轨迹执行接口。
 

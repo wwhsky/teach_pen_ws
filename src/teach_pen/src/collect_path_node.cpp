@@ -1,17 +1,25 @@
 #include <cmath>
+#include <atomic>
+#include <chrono>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/joy.hpp>
 #include <tf2/time.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <yaml-cpp/yaml.h>
+
+#include <sys/select.h>
+#include <termios.h>
+#include <unistd.h>
 
 struct PathSample
 {
@@ -25,73 +33,150 @@ public:
   CollectPathNode()
   : Node("collect_path_node"),
     m_tf_buffer(std::make_unique<tf2_ros::Buffer>(get_clock())),
-    
     m_tf_listener(std::make_unique<tf2_ros::TransformListener>(*m_tf_buffer))
   {
     m_base_frame = declare_parameter<std::string>("base_frame", "robot_base");
     m_tip_frame = declare_parameter<std::string>("tip_frame", "teaching_pen_tip");
-    m_buttons_topic = declare_parameter<std::string>("buttons_topic", "/vive_tracker/buttons");
     m_output_file = declare_parameter<std::string>("output_file", "config/paths/demo_path.yaml");
-    m_sample_button = declare_parameter<int>("sample_button", 0);
-    m_record_button = declare_parameter<int>("record_button", 1);
-    m_undo_button = declare_parameter<int>("undo_button", 2);
-    m_save_button = declare_parameter<int>("save_button", 3);
     m_lookup_timeout_sec = declare_parameter<double>("lookup_timeout_sec", 0.2);
     m_min_record_interval_sec = declare_parameter<double>("min_record_interval_sec", 0.05);
 
-    m_buttons_sub = create_subscription<sensor_msgs::msg::Joy>(
-      m_buttons_topic,
-      rclcpp::QoS(10), // 通信质量
-      std::bind(&CollectPathNode::buttonsCallback, this, std::placeholders::_1)); // 回调函数，在收到topic时使用
+    startKeyboardReader();
+    m_record_timer = create_wall_timer(
+      std::chrono::milliseconds(10),
+      std::bind(&CollectPathNode::recordTimerCallback, this));
 
     RCLCPP_INFO(
       get_logger(),
-      "Collect path from TF %s <- %s. buttons: sample=%d record=%d undo=%d save=%d topic=%s",
-      m_base_frame.c_str(), m_tip_frame.c_str(), m_sample_button, m_record_button,
-      m_undo_button, m_save_button, m_buttons_topic.c_str());
+      "Collect path from TF %s <- %s. keys: Space=sample r=record u=undo s=save q=quit",
+      m_base_frame.c_str(), m_tip_frame.c_str());
+  }
+
+  ~CollectPathNode() override
+  {
+    m_keyboard_running = false;
+    if (m_keyboard_thread.joinable()) {
+      m_keyboard_thread.join();
+    }
+    restoreTerminal();
   }
 
 private:
-  // 回调函数，在每次收到消息时被调用
-  void buttonsCallback(const sensor_msgs::msg::Joy::SharedPtr msg)
+  void startKeyboardReader()
   {
-    const bool sample_pressed = isPressed(*msg, m_sample_button);
-    const bool record_pressed = isPressed(*msg, m_record_button);
-    const bool undo_pressed = isPressed(*msg, m_undo_button);
-    const bool save_pressed = isPressed(*msg, m_save_button);
-
-    if (risingEdge(m_sample_button, sample_pressed)) {
-      sampleOnce("button");
+    if (!isatty(STDIN_FILENO)) {
+      RCLCPP_WARN(get_logger(), "stdin is not a TTY, keyboard control is disabled");
+      return;
     }
 
-    // 在每次m_record_button按下时切换m_recording
-    if (risingEdge(m_record_button, record_pressed)) {
+    if (tcgetattr(STDIN_FILENO, &m_original_terminal) != 0) {
+      RCLCPP_WARN(get_logger(), "failed to read terminal settings, keyboard control is disabled");
+      return;
+    }
+
+    m_terminal_configured = true;
+    auto raw_terminal = m_original_terminal;
+    raw_terminal.c_lflag &= static_cast<unsigned int>(~(ICANON | ECHO));
+    raw_terminal.c_cc[VMIN] = 0;
+    raw_terminal.c_cc[VTIME] = 0;
+
+    if (tcsetattr(STDIN_FILENO, TCSANOW, &raw_terminal) != 0) {
+      m_terminal_configured = false;
+      RCLCPP_WARN(get_logger(), "failed to configure terminal, keyboard control is disabled");
+      return;
+    }
+
+    m_keyboard_running = true;
+    m_keyboard_thread = std::thread(&CollectPathNode::keyboardLoop, this);
+  }
+
+  void restoreTerminal()
+  {
+    if (m_terminal_configured) {
+      tcsetattr(STDIN_FILENO, TCSANOW, &m_original_terminal);
+      m_terminal_configured = false;
+    }
+  }
+
+  void keyboardLoop()
+  {
+    while (m_keyboard_running && rclcpp::ok()) {
+      fd_set read_fds;
+      FD_ZERO(&read_fds);
+      FD_SET(STDIN_FILENO, &read_fds);
+
+      timeval timeout;
+      timeout.tv_sec = 0;
+      timeout.tv_usec = 100000;
+
+      const int ready = select(STDIN_FILENO + 1, &read_fds, nullptr, nullptr, &timeout);
+      if (ready <= 0 || !FD_ISSET(STDIN_FILENO, &read_fds)) {
+        continue;
+      }
+
+      char key = '\0';
+      if (read(STDIN_FILENO, &key, 1) != 1) {
+        continue;
+      }
+
+      handleKey(key);
+    }
+  }
+
+  void handleKey(char key)
+  {
+    key = static_cast<char>(std::tolower(static_cast<unsigned char>(key)));
+
+    if (key == ' ') {
+      sampleOnce("key");
+    } else if (key == 'r') {
+      toggleRecording();
+    } else if (key == 'u') {
+      undoLastSample();
+    } else if (key == 's') {
+      saveSamples();
+    } else if (key == 'q') {
+      RCLCPP_INFO(get_logger(), "quit requested from keyboard");
+      rclcpp::shutdown();
+    }
+  }
+
+  void toggleRecording()
+  {
+    {
+      std::lock_guard<std::mutex> lock(m_state_mutex);
       m_recording = !m_recording;
       m_last_record_sample_time = rclcpp::Time(0, 0, get_clock()->get_clock_type());
-      RCLCPP_INFO(get_logger(), "continuous recording: %s", m_recording ? "on" : "off");
+    }
+    RCLCPP_INFO(get_logger(), "continuous recording: %s", isRecording() ? "on" : "off");
+  }
+
+  bool isRecording()
+  {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    return m_recording;
+  }
+
+  void recordTimerCallback()
+  {
+    if (!isRecording()) {
+      return;
     }
 
-    if (risingEdge(m_undo_button, undo_pressed)) {
-      undoLastSample();
-    }
-
-    if (risingEdge(m_save_button, save_pressed)) {
-      saveSamples();
-    }
-
-    // 在recording状态下持续采样
-    if (m_recording) {
-      const auto now_time = now();
-      if (m_last_record_sample_time.nanoseconds() == 0 ||
-        (now_time - m_last_record_sample_time).seconds() >= m_min_record_interval_sec)
+    const auto now_time = now();
+    {
+      std::lock_guard<std::mutex> lock(m_state_mutex);
+      if (m_last_record_sample_time.nanoseconds() != 0 &&
+        (now_time - m_last_record_sample_time).seconds() < m_min_record_interval_sec)
       {
-        if (sampleOnce("record")) {
-          m_last_record_sample_time = now_time;
-        }
+        return;
       }
     }
 
-    m_previous_buttons = msg->buttons;
+    if (sampleOnce("record")) {
+      std::lock_guard<std::mutex> lock(m_state_mutex);
+      m_last_record_sample_time = now_time;
+    }
   }
 
   bool sampleOnce(const std::string & reason)
@@ -106,14 +191,20 @@ private:
       PathSample sample;
       sample.stamp = transform.header.stamp;
       sample.transform = transform.transform;
-      m_samples.push_back(sample);
+
+      std::size_t sample_count = 0;
+      {
+        std::lock_guard<std::mutex> lock(m_state_mutex);
+        m_samples.push_back(sample);
+        sample_count = m_samples.size();
+      }
 
       const auto & p = sample.transform.translation;
       const auto & q = sample.transform.rotation;
       RCLCPP_INFO(
         get_logger(),
         "sample %zu (%s): p=[%.4f %.4f %.4f], q=[%.4f %.4f %.4f %.4f]",
-        m_samples.size(), reason.c_str(), p.x, p.y, p.z, q.x, q.y, q.z, q.w);
+        sample_count, reason.c_str(), p.x, p.y, p.z, q.x, q.y, q.z, q.w);
       return true;
     } catch (const tf2::TransformException & ex) {
       RCLCPP_WARN(
@@ -126,6 +217,7 @@ private:
 
   void undoLastSample()
   {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
     if (m_samples.empty()) {
       RCLCPP_WARN(get_logger(), "no sample to undo");
       return;
@@ -137,14 +229,20 @@ private:
 
   void saveSamples()
   {
+    std::vector<PathSample> samples;
+    {
+      std::lock_guard<std::mutex> lock(m_state_mutex);
+      samples = m_samples;
+    }
+
     YAML::Node root;
     root["base_frame"] = m_base_frame;
     root["tip_frame"] = m_tip_frame;
-    root["sample_count"] = static_cast<int>(m_samples.size());
+    root["sample_count"] = static_cast<int>(samples.size());
 
     YAML::Node samples_node(YAML::NodeType::Sequence);
-    for (std::size_t i = 0; i < m_samples.size(); ++i) {
-      const auto & sample = m_samples[i];
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+      const auto & sample = samples[i];
       const auto & p = sample.transform.translation;
       const auto & q = sample.transform.rotation;
 
@@ -171,49 +269,28 @@ private:
 
       output << root;
       output << "\n";
-      RCLCPP_INFO(get_logger(), "saved %zu samples to %s", m_samples.size(), m_output_file.c_str());
+      RCLCPP_INFO(get_logger(), "saved %zu samples to %s", samples.size(), m_output_file.c_str());
     } catch (const std::exception & ex) {
       RCLCPP_ERROR(get_logger(), "failed to save %s: %s", m_output_file.c_str(), ex.what());
     }
   }
 
-  bool isPressed(const sensor_msgs::msg::Joy & msg, int index) const
-  {
-    return index >= 0 &&
-           static_cast<std::size_t>(index) < msg.buttons.size() &&
-           msg.buttons[static_cast<std::size_t>(index)] != 0;
-  }
-
-  bool risingEdge(int index, bool pressed) const
-  {
-    if (!pressed || index < 0) {
-      return false;
-    }
-    const auto button_index = static_cast<std::size_t>(index);
-    // 防止第一帧，m_previous_buttons为空时没法判断，此时直接判定为上升沿
-    if (button_index >= m_previous_buttons.size()) {
-      return true;
-    }
-    return m_previous_buttons[button_index] == 0;
-  }
-
   std::unique_ptr<tf2_ros::Buffer> m_tf_buffer;
   std::unique_ptr<tf2_ros::TransformListener> m_tf_listener;
-  rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr m_buttons_sub;
+  rclcpp::TimerBase::SharedPtr m_record_timer;
+  std::thread m_keyboard_thread;
+  std::atomic_bool m_keyboard_running{false};
+  termios m_original_terminal{};
+  bool m_terminal_configured{false};
 
   std::string m_base_frame;
   std::string m_tip_frame;
-  std::string m_buttons_topic;
   std::string m_output_file;
-  int m_sample_button{0};
-  int m_record_button{1};
-  int m_undo_button{2};
-  int m_save_button{3};
   double m_lookup_timeout_sec{0.2};
   double m_min_record_interval_sec{0.05};
+  std::mutex m_state_mutex;
   bool m_recording{false};
   rclcpp::Time m_last_record_sample_time{0, 0, RCL_ROS_TIME};
-  std::vector<int32_t> m_previous_buttons;
   std::vector<PathSample> m_samples;
 };
 
