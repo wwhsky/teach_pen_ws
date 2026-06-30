@@ -14,11 +14,13 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_core REQUIRED)
+find_package(shape_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common filters segmentation)
 
@@ -30,6 +32,7 @@ ament_target_dependencies(collect_path_node
   rclcpp
   geometry_msgs
   sensor_msgs
+  tf2
   tf2_ros
   tf2_geometry_msgs
 )
@@ -56,6 +59,7 @@ ament_target_dependencies(replay_path_node
   moveit_msgs
   moveit_ros_planning_interface
   moveit_core
+  shape_msgs
 )
 target_link_libraries(replay_path_node yaml-cpp)
 

@@ -10,6 +10,20 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
+def find_default_calibration_config_dir():
+    candidates = [Path.cwd() / "config" / "calibration"]
+    candidates.extend(
+        parent / "config" / "calibration"
+        for parent in Path(__file__).resolve().parents
+    )
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return candidates[0]
+
+
 def include_moveit_launch(moveit_config_package, launch_file, condition=None):
     return IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -24,12 +38,12 @@ def include_moveit_launch(moveit_config_package, launch_file, condition=None):
 
 
 def generate_launch_description():
-    teach_pen_share = Path(get_package_share_directory("teach_pen"))
+    default_calibration_config_dir = find_default_calibration_config_dir()
     calibration_files = [
-        str(teach_pen_share / "calibration" / "teaching_pen_tip.yaml"),
-        str(teach_pen_share / "calibration" / "welding_torch_tip.yaml"),
-        str(teach_pen_share / "calibration" / "vr_to_robot.yaml"),
-        str(teach_pen_share / "calibration" / "workpiece.yaml"),
+        str(default_calibration_config_dir / "teaching_pen_tip.yaml"),
+        str(default_calibration_config_dir / "welding_torch_tip.yaml"),
+        str(default_calibration_config_dir / "vr_to_robot.yaml"),
+        str(default_calibration_config_dir / "workpiece.yaml"),
     ]
 
     model = LaunchConfiguration("model")

@@ -85,19 +85,25 @@ public:
     const bool center_on_lighthouse = declare_parameter<bool>("center_on_lighthouse", true);
     const bool force_calibrate = declare_parameter<bool>("force_calibrate", false);
     const bool use_raw_observation = declare_parameter<bool>("use_raw_observation", false);
+    const bool show_raw_observation = declare_parameter<bool>("show_raw_observation", false);
+    const bool use_kalman = declare_parameter<bool>("use_kalman", true);
     const int globalscenesolver = declare_parameter<int>("globalscenesolver", 1);
     const int use_stationary_sensor_window =
       declare_parameter<int>("use_stationary_sensor_window", 1);
     const std::string poser = declare_parameter<std::string>("poser", "");
     const bool precise = declare_parameter<bool>("precise", false);
+    const int required_meas = declare_parameter<int>("required_meas", 8);
+    const double time_window_ms = declare_parameter<double>("time_window_ms", 0.0);
+    const int syncs_per_run = declare_parameter<int>("syncs_per_run", 1);
+    const double min_report_time_ms = declare_parameter<double>("min_report_time_ms", -1.0);
+    m_pose_filter_alpha = std::clamp(declare_parameter<double>("pose_filter_alpha", 1.0), 0.0, 1.0);
+    if (min_report_time_ms >= 0.0) {
+      m_pose_min_publish_interval = rclcpp::Duration::from_seconds(min_report_time_ms / 1000.0);
+    }
     const int verbosity = declare_parameter<int>("libsurvive_verbosity", 1);
     const double poll_rate_hz = declare_parameter<double>("poll_rate_hz", 250.0);
-    const double visibility_tolerance_ms = declare_parameter<double>("visibility_tolerance_ms", 0.0);
     const std::string config_file = declare_parameter<std::string>("config_file", "");
-    if (visibility_tolerance_ms > 0.0) {
-      m_visibility_tolerance_ticks =
-        static_cast<survive_long_timecode>(visibility_tolerance_ms * 48000.0);
-    }
+    const bool effective_use_kalman = use_raw_observation ? false : use_kalman;
 
     m_first_pose_publisher =
       create_publisher<geometry_msgs::msg::PoseStamped>(m_topic_prefix + "/pose", 10);
@@ -112,6 +118,9 @@ public:
       "--lighthouse-gen", std::to_string(lighthouse_generation),
       "--globalscenesolver", std::to_string(globalscenesolver),
       "--use-stationary-sensor-window", std::to_string(use_stationary_sensor_window),
+      "--use-kalman", effective_use_kalman ? "1" : "0",
+      "--required-meas", std::to_string(required_meas),
+      "--syncs-per-run", std::to_string(syncs_per_run),
       "--v", std::to_string(verbosity),
     };
     if (!poser.empty()) {
@@ -121,6 +130,12 @@ public:
     if (precise) {
       arguments.emplace_back("--precise");
     }
+    if (time_window_ms > 0.0) {
+      const auto time_window_ticks =
+        static_cast<int>(std::round(time_window_ms * 48000.0));
+      arguments.emplace_back("--time-window");
+      arguments.emplace_back(std::to_string(time_window_ticks));
+    }
     if (center_on_lighthouse) {
       arguments.emplace_back("--center-on-lh0");
     }
@@ -129,8 +144,9 @@ public:
     }
     if (use_raw_observation) {
       arguments.emplace_back("--use-raw-obs");
-      arguments.emplace_back("--use-kalman");
-      arguments.emplace_back("0");
+    }
+    if (show_raw_observation) {
+      arguments.emplace_back("--show-raw-obs");
     }
     if (!config_file.empty()) {
       arguments.emplace_back("-c");
@@ -157,12 +173,14 @@ public:
     RCLCPP_INFO(
       get_logger(),
       "libsurvive initialized: lighthouses=%d generation=%d center_on_lighthouse=%s "
-      "force_calibrate=%s use_raw_observation=%s globalscenesolver=%d "
-      "use_stationary_sensor_window=%d poser=%s precise=%s visibility_tolerance_ms=%.3f",
+      "force_calibrate=%s use_raw_observation=%s show_raw_observation=%s use_kalman=%s "
+      "poser=%s precise=%s required_meas=%d time_window_ms=%.3f syncs_per_run=%d "
+      "min_report_time_ms=%.3f pose_filter_alpha=%.3f",
       lighthouse_count, lighthouse_generation, center_on_lighthouse ? "true" : "false",
       force_calibrate ? "true" : "false", use_raw_observation ? "true" : "false",
-      globalscenesolver, use_stationary_sensor_window, poser.empty() ? "default" : poser.c_str(),
-      precise ? "true" : "false", visibility_tolerance_ms);
+      show_raw_observation ? "true" : "false", effective_use_kalman ? "true" : "false",
+      poser.empty() ? "default" : poser.c_str(), precise ? "true" : "false",
+      required_meas, time_window_ms, syncs_per_run, min_report_time_ms, m_pose_filter_alpha);
   }
 
   ~LibsurviveTrackerNode() override
@@ -181,6 +199,13 @@ private:
   {
     std::array<int32_t, 4> buttons{0, 0, 0, 0};
     std::array<float, 3> axes{0.0F, 0.0F, 0.0F};
+  };
+
+  struct PoseFilterState
+  {
+    bool initialized{false};
+    rclcpp::Time last_publish_stamp{0, 0, RCL_ROS_TIME};
+    geometry_msgs::msg::Pose pose;
   };
 
   bool acceptsDevice(const SurviveSimpleObject * object) const
@@ -258,6 +283,55 @@ private:
     message.pose.orientation.y = event.pose.Rot[2];
     message.pose.orientation.z = event.pose.Rot[3];
 
+    auto & filter_state = m_pose_filter_states[serial];
+    if (filter_state.initialized && m_pose_min_publish_interval.nanoseconds() > 0 &&
+      stamp - filter_state.last_publish_stamp < m_pose_min_publish_interval)
+    {
+      return;
+    }
+
+    if (filter_state.initialized && m_pose_filter_alpha < 1.0) {
+      const double alpha = m_pose_filter_alpha;
+      const double previous = 1.0 - alpha;
+
+      message.pose.position.x =
+        previous * filter_state.pose.position.x + alpha * message.pose.position.x;
+      message.pose.position.y =
+        previous * filter_state.pose.position.y + alpha * message.pose.position.y;
+      message.pose.position.z =
+        previous * filter_state.pose.position.z + alpha * message.pose.position.z;
+
+      double dot =
+        filter_state.pose.orientation.w * message.pose.orientation.w +
+        filter_state.pose.orientation.x * message.pose.orientation.x +
+        filter_state.pose.orientation.y * message.pose.orientation.y +
+        filter_state.pose.orientation.z * message.pose.orientation.z;
+      const double sign = dot < 0.0 ? -1.0 : 1.0;
+      message.pose.orientation.w =
+        previous * filter_state.pose.orientation.w + alpha * sign * message.pose.orientation.w;
+      message.pose.orientation.x =
+        previous * filter_state.pose.orientation.x + alpha * sign * message.pose.orientation.x;
+      message.pose.orientation.y =
+        previous * filter_state.pose.orientation.y + alpha * sign * message.pose.orientation.y;
+      message.pose.orientation.z =
+        previous * filter_state.pose.orientation.z + alpha * sign * message.pose.orientation.z;
+
+      const double norm = std::sqrt(
+        message.pose.orientation.w * message.pose.orientation.w +
+        message.pose.orientation.x * message.pose.orientation.x +
+        message.pose.orientation.y * message.pose.orientation.y +
+        message.pose.orientation.z * message.pose.orientation.z);
+      if (norm > 0.0) {
+        message.pose.orientation.w /= norm;
+        message.pose.orientation.x /= norm;
+        message.pose.orientation.y /= norm;
+        message.pose.orientation.z /= norm;
+      }
+    }
+    filter_state.initialized = true;
+    filter_state.last_publish_stamp = stamp;
+    filter_state.pose = message.pose;
+
     posePublisherFor(serial)->publish(message);
 
     const bool publish_as_primary =
@@ -304,7 +378,7 @@ private:
     SurviveObject * survive_object = survive_simple_get_survive_object(object);
     if (survive_object != nullptr) {
       SurviveSensorActivations_valid_counts(
-        &survive_object->activations, m_visibility_tolerance_ticks, &measurement_count, &lighthouse_count,
+        &survive_object->activations, 0, &measurement_count, &lighthouse_count,
         &axis_count, measurements_per_axis.data());
     }
     survive_simple_unlock(m_context);
@@ -461,7 +535,8 @@ private:
   bool m_publish_tf{true};
   bool m_publish_first_pose_topic{true};
   bool m_debug_events{false};
-  survive_long_timecode m_visibility_tolerance_ticks{0};
+  double m_pose_filter_alpha{1.0};
+  rclcpp::Duration m_pose_min_publish_interval{0, 0};
 
   PosePublisher::SharedPtr m_first_pose_publisher;
   ButtonPublisher::SharedPtr m_first_button_publisher;
@@ -470,6 +545,7 @@ private:
   std::map<std::string, PosePublisher::SharedPtr> m_pose_publishers;
   std::map<std::string, ButtonPublisher::SharedPtr> m_button_publishers;
   std::map<std::string, ButtonState> m_button_states;
+  std::map<std::string, PoseFilterState> m_pose_filter_states;
 };
 
 int main(int argc, char * argv[])
