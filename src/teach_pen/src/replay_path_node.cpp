@@ -1,7 +1,12 @@
 #include <fstream>
+#include <algorithm>
+#include <atomic>
+#include <csignal>
+#include <cstdlib>
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -10,12 +15,15 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit/planning_scene/planning_scene.h>
+#include <moveit/collision_detection/collision_common.h>
 #include <moveit/robot_state/conversions.h>
 #include <moveit/robot_trajectory/robot_trajectory.h>
 #include <moveit/trajectory_processing/iterative_time_parameterization.h>
 #include <moveit_msgs/msg/collision_object.hpp>
 #include <moveit_msgs/msg/display_trajectory.hpp>
 #include <moveit_msgs/msg/robot_trajectory.hpp>
+#include <moveit_msgs/srv/get_state_validity.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <shape_msgs/msg/solid_primitive.hpp>
 #include <tf2/LinearMath/Quaternion.h>
@@ -28,6 +36,12 @@ struct PathSample
   geometry_msgs::msg::Transform transform;
 };
 
+class ReplayPathNode;
+
+std::mutex g_replay_node_mutex;
+std::weak_ptr<ReplayPathNode> g_replay_node;
+std::atomic_bool g_sigint_seen{false};
+
 class ReplayPathNode : public rclcpp::Node
 {
 public:
@@ -39,7 +53,7 @@ public:
         m_input_file = declare_parameter<std::string>("input_file", "config/paths/demo_path.yaml");
         m_tool_calibration_file = declare_parameter<std::string>(
             "tool_calibration_file", "config/calibration/welding_torch_tip.yaml");
-        m_preview_delay_sec = declare_parameter<double>("preview_delay_sec", 1.0);
+        m_preview_delay_sec = declare_parameter<double>("preview_delay_sec", 0.0);
         m_execute = declare_parameter<bool>("execute", true);
         m_pose_reference_frame = declare_parameter<std::string>("pose_reference_frame", "robot_base");
         m_end_effector_link = declare_parameter<std::string>("end_effector_link", "Link6");
@@ -47,17 +61,19 @@ public:
         m_num_planning_attempts = declare_parameter<int>("num_planning_attempts", 10);
         m_goal_position_tolerance = declare_parameter<double>("goal_position_tolerance", 0.001);
         m_goal_orientation_tolerance = declare_parameter<double>("goal_orientation_tolerance", 0.01);
-        m_cartesian_eef_step = declare_parameter<double>("cartesian_eef_step", 0.005);
+        m_cartesian_eef_step = declare_parameter<double>("cartesian_eef_step", 0.001);
         m_cartesian_min_fraction = declare_parameter<double>("cartesian_min_fraction", 1.0);
         m_path_mode = declare_parameter<std::string>("path_mode", "cartesian");
         m_enable_table_collision = declare_parameter<bool>("enable_table_collision", true);
         m_table_frame = declare_parameter<std::string>("table_frame", "robot_base");
-        m_table_z = declare_parameter<double>("table_z", 0.0);
+        m_table_z = declare_parameter<double>("table_z", -0.015);
         m_table_size_x = declare_parameter<double>("table_size_x", 2.0);
         m_table_size_y = declare_parameter<double>("table_size_y", 2.0);
         m_table_thickness = declare_parameter<double>("table_thickness", 0.04);
         m_display_pub = create_publisher<moveit_msgs::msg::DisplayTrajectory>(
             "/display_planned_path", 10);
+        m_state_validity_client = create_client<moveit_msgs::srv::GetStateValidity>(
+            "/check_state_validity");
         declareKinematicsParameters();
     }
 
@@ -99,6 +115,14 @@ public:
 
         applyTableCollisionObject();
         return true;
+    }
+
+    void stopMotion()
+    {
+        if (m_move_group) {
+            RCLCPP_WARN(get_logger(), "Stopping MoveIt execution");
+            m_move_group->stop();
+        }
     }
 
     void applyTableCollisionObject()
@@ -360,6 +384,70 @@ public:
         RCLCPP_INFO(get_logger(), "%s", message.c_str());
     }
 
+    bool logStateValidity(
+        const moveit::core::RobotState & state,
+        const std::string & label) const
+    {
+        if (m_state_validity_client &&
+            m_state_validity_client->wait_for_service(std::chrono::milliseconds(200))) {
+            auto request = std::make_shared<moveit_msgs::srv::GetStateValidity::Request>();
+            moveit::core::robotStateToRobotStateMsg(state, request->robot_state);
+            request->group_name = m_planning_group;
+
+            auto future = m_state_validity_client->async_send_request(request);
+            const auto status = future.wait_for(std::chrono::seconds(2));
+            if (status == std::future_status::ready) {
+                const auto response = future.get();
+                if (response->valid) {
+                    RCLCPP_INFO(get_logger(), "%s validity in move_group scene: ok", label.c_str());
+                    return true;
+                }
+
+                RCLCPP_ERROR(get_logger(), "%s invalid in move_group scene", label.c_str());
+                for (const auto & contact : response->contacts) {
+                    RCLCPP_ERROR(
+                        get_logger(),
+                        "  collision pair: %s <-> %s",
+                        contact.contact_body_1.c_str(),
+                        contact.contact_body_2.c_str());
+                }
+                return false;
+            }
+
+            RCLCPP_WARN(get_logger(), "%s validity service timed out; falling back to local scene", label.c_str());
+        }
+
+        bool valid = true;
+        if (!state.satisfiesBounds(m_joint_model_group)) {
+            RCLCPP_ERROR(get_logger(), "%s violates joint bounds", label.c_str());
+            valid = false;
+        }
+
+        planning_scene::PlanningScene planning_scene(m_move_group->getRobotModel());
+        collision_detection::CollisionRequest request;
+        collision_detection::CollisionResult result;
+        request.contacts = true;
+        request.max_contacts = 20;
+        planning_scene.checkCollision(request, result, state);
+        if (result.collision) {
+            RCLCPP_ERROR(get_logger(), "%s is in collision", label.c_str());
+            for (const auto & contact_entry : result.contacts) {
+                RCLCPP_ERROR(
+                    get_logger(),
+                    "  collision pair: %s <-> %s contacts=%zu",
+                    contact_entry.first.first.c_str(),
+                    contact_entry.first.second.c_str(),
+                    contact_entry.second.size());
+            }
+            valid = false;
+        }
+
+        if (valid) {
+            RCLCPP_INFO(get_logger(), "%s validity: ok", label.c_str());
+        }
+        return valid;
+    }
+
     bool planAndMaybeExecuteJointTarget(
         const moveit::core::RobotState & target_state,
         const std::string & label)
@@ -367,6 +455,8 @@ public:
         const auto current_state = m_move_group->getCurrentState(2.0);
         if (current_state) {
             logJointDeltas(*current_state, target_state, label);
+            logStateValidity(*current_state, label + " start state");
+            logStateValidity(target_state, label + " target state");
         }
 
         m_move_group->setStartStateToCurrentState();
@@ -386,6 +476,7 @@ public:
             return true;
         }
 
+        RCLCPP_INFO(this->get_logger(), "executing %s plan", label.c_str());
         const auto execute_result = m_move_group->execute(plan);
         if (execute_result != moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
             RCLCPP_ERROR(this->get_logger(), "%s 执行失败", label.c_str());
@@ -453,6 +544,8 @@ public:
                 this->get_logger(),
                 "路径规划失败，只有%.1f%%的点成功规划；cartesian_eef_step=%.4f, required=%.1f%%",
                 fraction * 100.0, m_cartesian_eef_step, m_cartesian_min_fraction * 100.0);
+            logCartesianFractionLocation(waypoints, fraction);
+            diagnoseCartesianFailure(waypoints);
             return false;
         } else if (fraction < 1.0) {
             RCLCPP_WARN(
@@ -462,6 +555,190 @@ public:
         }
 
         return timeParameterizeDisplayAndExecute(trajectory);
+    }
+
+    tf2::Transform poseToTransform(const geometry_msgs::msg::Pose & pose) const
+    {
+        tf2::Quaternion q(
+            pose.orientation.x,
+            pose.orientation.y,
+            pose.orientation.z,
+            pose.orientation.w);
+        q.normalize();
+        return tf2::Transform(
+            q,
+            tf2::Vector3(pose.position.x, pose.position.y, pose.position.z));
+    }
+
+    geometry_msgs::msg::Pose transformToPose(const tf2::Transform & transform) const
+    {
+        geometry_msgs::msg::Pose pose;
+        pose.position.x = transform.getOrigin().x();
+        pose.position.y = transform.getOrigin().y();
+        pose.position.z = transform.getOrigin().z();
+        const auto q = transform.getRotation().normalized();
+        pose.orientation.x = q.x();
+        pose.orientation.y = q.y();
+        pose.orientation.z = q.z();
+        pose.orientation.w = q.w();
+        return pose;
+    }
+
+    geometry_msgs::msg::Pose interpolatePose(
+        const geometry_msgs::msg::Pose & start,
+        const geometry_msgs::msg::Pose & goal,
+        double t) const
+    {
+        const auto start_tf = poseToTransform(start);
+        const auto goal_tf = poseToTransform(goal);
+        const auto p = start_tf.getOrigin().lerp(goal_tf.getOrigin(), t);
+        const auto q = start_tf.getRotation().slerp(goal_tf.getRotation(), t).normalized();
+        return transformToPose(tf2::Transform(q, p));
+    }
+
+    void logCartesianFractionLocation(
+        const std::vector<geometry_msgs::msg::Pose> & waypoints,
+        double fraction) const
+    {
+        auto segment_start = m_move_group->getCurrentPose(m_move_group->getEndEffectorLink()).pose;
+        std::vector<std::size_t> segment_steps;
+        std::vector<double> segment_distances;
+        std::size_t total_steps = 0;
+        double total_distance = 0.0;
+
+        for (const auto & waypoint : waypoints) {
+            const auto start_tf = poseToTransform(segment_start);
+            const auto goal_tf = poseToTransform(waypoint);
+            const double distance = start_tf.getOrigin().distance(goal_tf.getOrigin());
+            const std::size_t step_count = std::max<std::size_t>(
+                1, static_cast<std::size_t>(std::ceil(distance / m_cartesian_eef_step)));
+
+            segment_steps.push_back(step_count);
+            segment_distances.push_back(distance);
+            total_steps += step_count;
+            total_distance += distance;
+            segment_start = waypoint;
+        }
+
+        if (total_steps == 0 || waypoints.empty()) {
+            return;
+        }
+
+        const auto completed_steps = static_cast<std::size_t>(
+            std::floor(std::clamp(fraction, 0.0, 1.0) * static_cast<double>(total_steps)));
+        std::size_t accumulated_steps = 0;
+        double accumulated_distance = 0.0;
+        for (std::size_t index = 0; index < segment_steps.size(); ++index) {
+            const auto next_accumulated_steps = accumulated_steps + segment_steps[index];
+            const auto segment_number = index + 1;
+            if (completed_steps <= next_accumulated_steps) {
+                const auto step_in_segment = completed_steps > accumulated_steps ?
+                    completed_steps - accumulated_steps : 0;
+                const double segment_fraction = segment_steps[index] > 0 ?
+                    static_cast<double>(step_in_segment) / static_cast<double>(segment_steps[index]) : 0.0;
+                const double approximate_distance =
+                    accumulated_distance + segment_fraction * segment_distances[index];
+
+                RCLCPP_ERROR(
+                    get_logger(),
+                    "Cartesian path stopped around waypoint segment %zu/%zu, step %zu/%zu, approx distance %.4f/%.4f m",
+                    segment_number,
+                    segment_steps.size(),
+                    step_in_segment,
+                    segment_steps[index],
+                    approximate_distance,
+                    total_distance);
+                return;
+            }
+            accumulated_steps = next_accumulated_steps;
+            accumulated_distance += segment_distances[index];
+        }
+    }
+
+    void diagnoseCartesianFailure(const std::vector<geometry_msgs::msg::Pose> & waypoints) const
+    {
+        const auto current_state = m_move_group->getCurrentState(2.0);
+        if (!current_state) {
+            RCLCPP_WARN(get_logger(), "Cartesian diagnose skipped: cannot get current state");
+            return;
+        }
+
+        planning_scene::PlanningScene planning_scene(m_move_group->getRobotModel());
+
+        auto diagnostic_state = *current_state;
+        auto segment_start = m_move_group->getCurrentPose(m_move_group->getEndEffectorLink()).pose;
+        std::size_t global_step = 0;
+
+        for (std::size_t waypoint_index = 0; waypoint_index < waypoints.size(); ++waypoint_index) {
+            const auto & segment_goal = waypoints[waypoint_index];
+            const auto start_tf = poseToTransform(segment_start);
+            const auto goal_tf = poseToTransform(segment_goal);
+            const double distance = start_tf.getOrigin().distance(goal_tf.getOrigin());
+            const std::size_t step_count = std::max<std::size_t>(
+                1, static_cast<std::size_t>(std::ceil(distance / m_cartesian_eef_step)));
+
+            for (std::size_t step = 1; step <= step_count; ++step) {
+                ++global_step;
+                const double t = static_cast<double>(step) / static_cast<double>(step_count);
+                const auto pose = interpolatePose(segment_start, segment_goal, t);
+
+                auto ik_state = diagnostic_state;
+                const bool ik_success = ik_state.setFromIK(
+                    m_joint_model_group,
+                    pose,
+                    m_move_group->getEndEffectorLink(),
+                    0.2);
+                if (!ik_success) {
+                    RCLCPP_ERROR(
+                        get_logger(),
+                        "Cartesian diagnose: IK failed at waypoint=%zu step=%zu/%zu global_step=%zu xyz=[%.6f, %.6f, %.6f] qxyzw=[%.6f, %.6f, %.6f, %.6f]",
+                        waypoint_index + 1, step, step_count, global_step,
+                        pose.position.x, pose.position.y, pose.position.z,
+                        pose.orientation.x, pose.orientation.y,
+                        pose.orientation.z, pose.orientation.w);
+                    return;
+                }
+
+                unwrapTargetNearReference(diagnostic_state, ik_state);
+                if (!ik_state.satisfiesBounds(m_joint_model_group)) {
+                    RCLCPP_ERROR(
+                        get_logger(),
+                        "Cartesian diagnose: joint bounds violated at waypoint=%zu step=%zu/%zu global_step=%zu",
+                        waypoint_index + 1, step, step_count, global_step);
+                    logJointDeltas(diagnostic_state, ik_state, "bounds failure");
+                    return;
+                }
+
+                collision_detection::CollisionRequest request;
+                collision_detection::CollisionResult result;
+                request.contacts = true;
+                request.max_contacts = 20;
+                planning_scene.checkCollision(request, result, ik_state);
+                if (result.collision) {
+                    RCLCPP_ERROR(
+                        get_logger(),
+                        "Cartesian diagnose: collision at waypoint=%zu step=%zu/%zu global_step=%zu xyz=[%.6f, %.6f, %.6f]",
+                        waypoint_index + 1, step, step_count, global_step,
+                        pose.position.x, pose.position.y, pose.position.z);
+                    for (const auto & contact_entry : result.contacts) {
+                        RCLCPP_ERROR(
+                            get_logger(),
+                            "  collision pair: %s <-> %s contacts=%zu",
+                            contact_entry.first.first.c_str(),
+                            contact_entry.first.second.c_str(),
+                            contact_entry.second.size());
+                    }
+                    return;
+                }
+
+                diagnostic_state = ik_state;
+            }
+            segment_start = segment_goal;
+        }
+
+        RCLCPP_WARN(
+            get_logger(),
+            "Cartesian diagnose found no IK/bounds/collision failure. computeCartesianPath may be failing due to jump filtering or internal IK discretization.");
     }
 
     bool timeParameterizeDisplayAndExecute(moveit_msgs::msg::RobotTrajectory & trajectory)
@@ -493,6 +770,7 @@ public:
         moveit::planning_interface::MoveGroupInterface::Plan plan;
         plan.trajectory_ = trajectory;
 
+        RCLCPP_INFO(this->get_logger(), "executing cartesian path");
         const auto execute_result = m_move_group->execute(plan);
         if (execute_result != moveit::core::MoveItErrorCode::SUCCESS) {
             RCLCPP_ERROR(this->get_logger(), "轨迹执行失败");
@@ -501,12 +779,42 @@ public:
         return true;
     }
 
+    bool planAndMaybeExecuteHome(const std::string & label)
+    {
+        const auto current_state = m_move_group->getCurrentState(2.0);
+        if (!current_state) {
+            RCLCPP_ERROR(this->get_logger(), "无法获取当前状态，无法规划 %s", label.c_str());
+            return false;
+        }
+
+        moveit::core::RobotState home_state(*current_state);
+        const std::vector<double> home_joints = {
+            1.74533, 2.0944, -2.26893, 3.14159, 1.5708, 3.14159};
+        home_state.setJointGroupPositions(m_joint_model_group, home_joints);
+        home_state.update();
+
+        return planAndMaybeExecuteJointTarget(home_state, label);
+    }
+
+    void returnHomeAfterFailure(const std::string & reason)
+    {
+        RCLCPP_WARN(this->get_logger(), "%s，尝试回 home", reason.c_str());
+        if (!planAndMaybeExecuteHome("home after failure")) {
+            RCLCPP_ERROR(this->get_logger(), "失败后回 home 也失败");
+        }
+    }
+
     void replayPath()
     {
         if (m_samples.empty()) {
             RCLCPP_ERROR(this->get_logger(), "采样点为空");
             return;
         }
+
+        if (!planAndMaybeExecuteHome("home start")) {
+            return;
+        }
+
         // 首先移动到轨迹开始点
         const auto & first_sample = m_samples[0];
         const geometry_msgs::msg::Pose pose = sampleTipToFlangePose(first_sample);
@@ -518,6 +826,7 @@ public:
         const auto current_state = m_move_group->getCurrentState(2.0);
         if (!current_state) {
             RCLCPP_ERROR(this->get_logger(), "无法获取当前状态，无法规划到初始采样点");
+            returnHomeAfterFailure("无法规划到初始采样点");
             return;
         }
         moveit::core::RobotState ik_target(*current_state);
@@ -527,23 +836,31 @@ public:
             ik_success ? "success" : "failed");
         if (!ik_success) {
             RCLCPP_ERROR(this->get_logger(), "初始采样点 IK 失败");
+            returnHomeAfterFailure("初始采样点 IK 失败");
             return;
         }
         if (!planAndMaybeExecuteJointTarget(ik_target, "initial target")) {
+            returnHomeAfterFailure("initial target 失败");
             return;
         }
 
+        bool path_success = false;
         if (m_path_mode == "joint") {
-            replayJointWaypoints();
-            return;
-        }
-
-        if (m_path_mode != "cartesian") {
+            path_success = replayJointWaypoints();
+        } else if (m_path_mode == "cartesian") {
+            path_success = replayCartesianWaypoints();
+        } else {
             RCLCPP_ERROR(this->get_logger(), "unknown path_mode: %s", m_path_mode.c_str());
+            returnHomeAfterFailure("path_mode 无效");
             return;
         }
 
-        replayCartesianWaypoints();
+        if (!path_success) {
+            returnHomeAfterFailure("路径执行失败");
+            return;
+        }
+
+        planAndMaybeExecuteHome("home end");
     }
 
 private:
@@ -571,6 +888,7 @@ private:
     tf2::Transform m_flange_to_tip;
     tf2::Transform m_tip_to_flange;
     rclcpp::Publisher<moveit_msgs::msg::DisplayTrajectory>::SharedPtr m_display_pub;
+    rclcpp::Client<moveit_msgs::srv::GetStateValidity>::SharedPtr m_state_validity_client;
 
     std::vector<PathSample> m_samples;
     std::unique_ptr<
@@ -578,12 +896,35 @@ private:
     const moveit::core::JointModelGroup* m_joint_model_group;
 };
 
+void handleReplaySigint(int)
+{
+    if (g_sigint_seen.exchange(true)) {
+        std::_Exit(130);
+    }
+
+    std::shared_ptr<ReplayPathNode> node;
+    {
+        std::lock_guard<std::mutex> lock(g_replay_node_mutex);
+        node = g_replay_node.lock();
+    }
+    if (node) {
+        node->stopMotion();
+    }
+    rclcpp::shutdown();
+}
+
 int main(int argc, char ** argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::NodeOptions options;
-    options.parameter_overrides({rclcpp::Parameter("use_sim_time", true)});
-    auto node = std::make_shared<ReplayPathNode>(options);
+    // rclcpp::NodeOptions options;
+    // options.parameter_overrides({rclcpp::Parameter("use_sim_time", true)});
+    // auto node = std::make_shared<ReplayPathNode>(options);
+    auto node = std::make_shared<ReplayPathNode>();
+    {
+        std::lock_guard<std::mutex> lock(g_replay_node_mutex);
+        g_replay_node = node;
+    }
+    std::signal(SIGINT, handleReplaySigint);
 
     // ROS2会在Node中使用CallbackGroup保存ROS对象（subscriptions,timers等）的回调
     // executor从Node的CallbackGroup中收集这些实体，等待其变为ready并执行它们的回调。

@@ -1,4 +1,4 @@
 parent_frame: robot_flange
 child_frame: welding_torch_tip
-translation: [0.0, 0.0543, 0.2943]
+translation: [0.0024872678777074896, 0.04989020346899347, 0.3056039337179699]
 rotation_xyzw: [-0.258262, 0.000000, 0.000000, 0.966075]

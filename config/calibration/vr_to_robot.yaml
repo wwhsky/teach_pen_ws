@@ -1,201 +1,29 @@
-created_at: '2026-06-30T15:24:07'
-frames:
-  tracker_parent_frame: steamvr_base
-  tracker_tip_frame: teaching_pen_tip
-  robot_parent_frame: robot_base
-  robot_tip_frame: welding_torch_tip
-sample_count: 5
-samples:
-- index: 1
-  tracker_tip:
-    stamp:
-      sec: 1782804196
-      nanosec: 103133601
-    parent_frame: steamvr_base
-    child_frame: teaching_pen_tip
-    translation:
-    - 0.17487023525485024
-    - -0.5369038038328056
-    - -0.8531165573180872
-    rotation_xyzw:
-    - 0.41411029893103946
-    - -0.34272974411934787
-    - 0.8295302265981257
-    - 0.15142188076758825
-  robot_tip:
-    stamp:
-      sec: 1782804196
-      nanosec: 102170640
-    parent_frame: robot_base
-    child_frame: welding_torch_tip
-    translation:
-    - -0.895672515536008
-    - 0.5998979185584732
-    - 0.15747878345114977
-    rotation_xyzw:
-    - -0.36193801457387365
-    - 0.5999643754622832
-    - 0.6846600521134206
-    - -0.20070932918657108
-- index: 2
-  tracker_tip:
-    stamp:
-      sec: 1782804204
-      nanosec: 944151568
-    parent_frame: steamvr_base
-    child_frame: teaching_pen_tip
-    translation:
-    - 0.23679454836584019
-    - -0.5241739322587164
-    - -1.6405909581890443
-    rotation_xyzw:
-    - 0.6598658119591885
-    - -0.3194004886112049
-    - 0.5909070425519448
-    - 0.3367332848782232
-  robot_tip:
-    stamp:
-      sec: 1782804204
-      nanosec: 934815328
-    parent_frame: robot_base
-    child_frame: welding_torch_tip
-    translation:
-    - -1.0766201512016393
-    - -0.16998941357031228
-    - 0.1633008853414091
-    rotation_xyzw:
-    - 0.5491258533949087
-    - -0.42940314500628035
-    - -0.4873382582314357
-    - 0.5259041340928773
-- index: 3
-  tracker_tip:
-    stamp:
-      sec: 1782804225
-      nanosec: 6372573
-    parent_frame: steamvr_base
-    child_frame: teaching_pen_tip
-    translation:
-    - -0.28373581873788734
-    - -0.6360519698416643
-    - -1.141460504547971
-    rotation_xyzw:
-    - -0.5264641928076844
-    - 0.6137563784821752
-    - -0.40030309496291666
-    - -0.43115657681045316
-  robot_tip:
-    stamp:
-      sec: 1782804224
-      nanosec: 984758589
-    parent_frame: robot_base
-    child_frame: welding_torch_tip
-    translation:
-    - -0.4874951518110899
-    - 0.2470076146039895
-    - 0.04866451659711897
-    rotation_xyzw:
-    - 0.7385157181467864
-    - -0.4295956322385761
-    - -0.5172411706547483
-    - 0.05003696824728762
-- index: 4
-  tracker_tip:
-    stamp:
-      sec: 1782804234
-      nanosec: 967374967
-    parent_frame: steamvr_base
-    child_frame: teaching_pen_tip
-    translation:
-    - -0.11216395523839914
-    - -0.6113052145392646
-    - -1.683311593455314
-    rotation_xyzw:
-    - 0.5832542410259383
-    - -0.5850258643365511
-    - 0.22240703972802908
-    - 0.5177782701716469
-  robot_tip:
-    stamp:
-      sec: 1782804234
-      nanosec: 929999918
-    parent_frame: robot_base
-    child_frame: welding_torch_tip
-    translation:
-    - -0.7400094610949172
-    - -0.26048087652370444
-    - 0.07082806637153338
-    rotation_xyzw:
-    - 0.7460172550278793
-    - -0.2771350249989137
-    - -0.523356825903858
-    - 0.30455223837522266
-- index: 5
-  tracker_tip:
-    stamp:
-      sec: 1782804243
-      nanosec: 207890986
-    parent_frame: steamvr_base
-    child_frame: teaching_pen_tip
-    translation:
-    - -0.003239939716430759
-    - -0.5879580377104809
-    - -1.22462268207875
-    rotation_xyzw:
-    - -0.5044817002579265
-    - 0.5438634788181722
-    - -0.4970738853489581
-    - -0.4501425141183156
-  robot_tip:
-    stamp:
-      sec: 1782804243
-      nanosec: 138838747
-    parent_frame: robot_base
-    child_frame: welding_torch_tip
-    translation:
-    - -0.777335761327762
-    - 0.2065730505175969
-    - 0.10060075970218083
-    rotation_xyzw:
-    - -0.5818115488438974
-    - 0.49376660519033166
-    - 0.6193785325862344
-    - -0.18455377157349886
+created_at: '2026-07-02T09:30:53'
+source_file: config/calibration/tool_vr_joint_calibration.yaml
 calibration_result:
-  type: rigid_transform_svd
-  description: Computed from teaching_pen_tip positions in steamvr_base and welding_torch_tip
-    positions in robot_base.
+  type: joint_tool_vr_transform
+  description: Copied from calibrate_tool_vr_joint vr_to_robot_transform.
   parent_frame: robot_base
   child_frame: steamvr_base
   translation:
-  - -0.5867533964796983
-  - 1.4104915634298651
-  - 0.7006272261505673
+  - -0.5897751717030961
+  - 1.4078011632501246
+  - 0.686909969908209
   rotation_xyzw:
-  - 0.05876668601671662
-  - 0.7010437791767005
-  - 0.7090177536761954
-  - 0.048763934051963144
+  - 0.057607293465603934
+  - 0.705516895628887
+  - 0.704284102727335
+  - 0.05395565185685956
   rotation_matrix:
-  - - -0.9883371107007767
-    - 0.013247049345825074
-    - 0.1517045526517567
-  - - 0.15154502927357316
-    - -0.012319396826850522
-    - 0.9883735814783262
-  - - 0.01496194219051003
-    - 0.9998363606838129
-    - 0.01016819258452415
-  sample_count: 5
-  singular_values:
-  - 0.4925748673770951
-  - 0.18850883985243644
-  - 0.0001308894808189997
-  mean_error: 0.001067970809655881
-  max_error: 0.002335852350665794
-  per_sample_errors:
-  - 0.0007312872803466158
-  - 0.0013105323685386836
-  - 0.00047128119459266066
-  - 0.002335852350665794
-  - 0.0004909008541356509
+  - - -0.9875403747445385
+    - 0.005285621992716719
+    - 0.1572770499773154
+  - - 0.15728605341302393
+    - 0.0013306047702409955
+    - 0.9875521894526391
+  - - 0.005010553978577165
+    - 0.9999851457352233
+    - -0.0021453805565082025
+  sample_count: 13
+  mean_error: 0.0019643763171788456
+  max_error: 0.00433695490278655

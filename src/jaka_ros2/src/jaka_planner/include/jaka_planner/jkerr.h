@@ -67,13 +67,20 @@
 #define ERR_DISABLE_TIMEOUT         -54             // disable robot timeout
 #define ERR_USERFRAME_SET_TIMEOUT   -55             // fail to set userframe
 #define ERR_TOOL_SET_TIMEOUT        -56             // fail to set tool
+#define ERR_EDG_INIT                -57         // edg init failed
+#define ERR_EDG_RUNNING             -58         // edg running, customer can only use edg interface
+#define ERR_EDG_MODE             -59         // The current edg mode does not support using edg_servo_j or edg_servo_p.
 
 #define ERR_IO_SET_TIMEOUT      -60             // fail to set IO
 #define ERR_OPERATION_TIMEOUT      -61             // operation timeout
 
+#define ERR_SERVO_FULL -62  // Servo queue is full
+#define ERR_SERVO_NOT_RUN -63  // Servo is not running
+
 #define ERR_NO_IMPLEMENT -9997     // not implement
 #define ERR_DEPRECATE -9998     // deprecated interface, will be removed in the future, function is still available
 #define ERR_OBSOLETE -9999      // obsolete interface, will be removed in the future, function is unavailable
+
 
 
 //note: if you got errCode which is larger than 10000, you should minus 10000 and compare with following grpc status code

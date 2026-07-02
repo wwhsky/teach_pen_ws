@@ -76,6 +76,10 @@ ament_target_dependencies(jaka_trajectory_executor_node
 target_link_libraries(jaka_trajectory_executor_node
   ${JAKA_SDK_LIBRARY}
 )
+set_target_properties(jaka_trajectory_executor_node PROPERTIES
+  BUILD_RPATH "${JAKA_PLANNER_DIR}/lib"
+  INSTALL_RPATH "$ORIGIN"
+)
 
 install(TARGETS
   collect_path_node
@@ -83,6 +87,10 @@ install(TARGETS
   replay_path_node
   jaka_trajectory_executor_node
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(FILES ${JAKA_SDK_LIBRARY}
+  DESTINATION lib
 )
 
 install(DIRECTORY launch

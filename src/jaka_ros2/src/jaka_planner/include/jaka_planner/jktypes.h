@@ -7,12 +7,16 @@
 
 #define TRUE 1
 #define FALSE 0
+
 #include <stdio.h>
 #include <stdint.h>
 
 typedef int BOOL;    // SDK bool type
 typedef int JKHD;    // SDK handler for C
 typedef int errno_t; // SDK error code feedback
+
+#define MAX_PAYLOAD_CNT 16
+#define MAX_FTSENSOR_CNT 20
 
 /**
  * @brief cartesian position without orientation
@@ -181,6 +185,7 @@ typedef struct {
 typedef struct {
     double mass;            ///< mass, unit：kg
     CartesianTran centroid; ///< centroid, unit：mm
+    int payload_id;         ///< payload identifier
 } PayLoad;
 
 /**
@@ -256,6 +261,15 @@ typedef enum {
     IO_PROFINET_SLAVE, ///< Profinet slave station IO, index start from 0.
     IO_EIP_SLAVE       ///< ETHRENET/IP slave station IO, index start from 0.
 } IOType;
+
+/**
+ * @brief DO info
+ */
+typedef struct {
+    IOType io_type;    ///< IO type
+    int index;
+    BOOL value;
+} DOInfo;
 
 /**
 * @brief EXtio Data
@@ -349,7 +363,7 @@ typedef struct {
     int motion_line;     ///<  motion CMD id
     int motion_line_sdk; ///< reserved
     BOOL inpos;          ///< current motion CMD is done, you should always check queue info at the same time
-    BOOL err_add_line;   /// fail to add motion CMD in case robot is already at target position
+    int err_add_line;   /// fail to add motion CMD in case robot is already at target position
     int queue;           ///< number of motion CMD in queue
     int active_queue;    ///< number of motion CMD which is under blending
     BOOL queue_full;     ///< cannot push any more motion CMD if queue is full
@@ -416,6 +430,80 @@ typedef struct {
     double tz; ///< rz componet
 } FTxyz;
 
+typedef struct {
+    double linear[3];
+    double angular[3];
+} VelocityLimit;
+typedef struct {
+    int id;           ///< Unique identifier of the sensor (assigned by system)
+    int sensor_model; ///< Sensor model ID, 2 for USB sensor, 6 for TIO sensor
+    char name[32];    ///< Human-readable sensor name (null-terminated C string)
+    int active;       ///< Activation status: 1 if normal, 0 if the sensor is to be deleted
+    int status;       ///< Current operational status code of the sensor: 1 if normal, -1 if in error
+} FTSensorBasicInfo;
+
+typedef struct {
+    int count;  ///< Number of sensors
+    FTSensorBasicInfo info[MAX_FTSENSOR_CNT];   ///< Array to hold sensor information
+} FTSensorBasicInfoStr;
+
+typedef struct {
+    int rule_id;   ///< User-defined rule identifier, can be 0,1,2
+    int sensor_id; ///< ID of the associated force-torque sensor
+    int active;    ///< Enable flag: 1 for enabled, 0 for disabled
+    FTxyz ft;      ///< Force and torque threshold values
+} FTSensorSoftLimitRule;
+
+typedef struct {
+    FTSensorSoftLimitRule rule[3];   ///< Array to hold sensor information
+} FTSensorSoftLimitRuleStr;
+
+typedef struct {
+    int count;
+    int sensor_id[MAX_FTSENSOR_CNT];
+} FTLinkedSensorIDStr;
+
+typedef struct {
+    FTxyz ft;
+    double min_val;
+    double max_val;
+} FTSensorThresholdStr;
+
+typedef struct {
+    int status;
+    FTxyz ft;
+} FTSensorDataStr;
+typedef struct {
+    int sensor_model;    ///< Sensor model identifier
+    char name[50];       ///< Name of the sensor
+    char comm_param[50]; ///< Communication parameters
+} FTSensorConfigStr;
+
+typedef struct {
+    double jVel[6]; ///< each joint，unit: rad/s
+} JointVelocity;
+typedef struct {
+    double jtorq[6]; ///< each joint torque，unit：N/m
+} JointTorque;
+typedef struct
+{
+    int cab_din[16];
+    int cab_dout[16];
+    double cab_ain[2];
+    double cab_aout[2];
+    int tool_din[2];
+    int tool_dout[2];
+    double tool_ain[2];
+} EdgIOState;
+
+typedef struct {
+    JointValue jointVal; ///< each joint position，unit：rad
+    JointVelocity jointVel; ///< each joint velocity, unit: rad/s
+    JointTorque jointTorq; ///< each joint torque，unit：N/m
+    CartesianPose cartpose;
+    FTxyz torqSensor; 
+    EdgIOState IOState;
+} EDGState;
 /**
  @brief
  */
@@ -440,8 +528,13 @@ typedef struct {
     int sig_type;      ///< type
     int sig_addr;      ///< address
     int value;         ///<
-    int frequency;     ///< must no greater than 10
+    int frequency;     ///< must no greater than 20
 } SignInfo;
+
+typedef struct {
+    char sig_name[20]; ///< signal name
+    int frequency;     ///< must no greater than 20
+} SignInfo_simple;
 
 /**
  *  @brief rs485 RTU signal config param
@@ -553,6 +646,11 @@ typedef struct
 	long code;		   ///< error code
 	char message[120]; ///< error message
 } ErrorCode;
+
+typedef struct
+{
+	int gain[6]; ///< error message
+} DragFrictionCompensationGainList;
 
 /**
 * @brief callback
