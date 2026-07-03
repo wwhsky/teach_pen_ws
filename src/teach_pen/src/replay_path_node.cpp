@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <geometry_msgs/msg/transform.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
@@ -26,14 +27,18 @@
 #include <moveit_msgs/srv/get_state_validity.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <shape_msgs/msg/solid_primitive.hpp>
+#include <tf2/exceptions.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Transform.h>
+#include <tf2/time.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <yaml-cpp/yaml.h>
 
 struct PathSample
 {
   rclcpp::Time stamp;
-  geometry_msgs::msg::Transform transform;
+  geometry_msgs::msg::Transform T_base_tip;
 };
 
 class ReplayPathNode;
@@ -42,6 +47,8 @@ std::mutex g_replay_node_mutex;
 std::weak_ptr<ReplayPathNode> g_replay_node;
 std::atomic_bool g_sigint_seen{false};
 
+// Transform naming convention: T_A_B means the pose of frame B in frame A.
+// It also transforms a point expressed in B into the same point expressed in A.
 class ReplayPathNode : public rclcpp::Node
 {
 public:
@@ -51,8 +58,9 @@ public:
         m_model = declare_parameter<std::string>("model", "zu5");
         m_planning_group = "jaka_" + m_model;
         m_input_file = declare_parameter<std::string>("input_file", "config/paths/demo_path.yaml");
-        m_tool_calibration_file = declare_parameter<std::string>(
-            "tool_calibration_file", "config/calibration/welding_torch_tip.yaml");
+        m_tool_parent_frame = declare_parameter<std::string>("tool_parent_frame", "robot_flange");
+        m_tool_tip_frame = declare_parameter<std::string>("tool_tip_frame", "welding_torch_tip");
+        m_tool_tf_timeout_sec = declare_parameter<double>("tool_tf_timeout_sec", 2.0);
         m_preview_delay_sec = declare_parameter<double>("preview_delay_sec", 0.0);
         m_execute = declare_parameter<bool>("execute", true);
         m_pose_reference_frame = declare_parameter<std::string>("pose_reference_frame", "robot_base");
@@ -71,6 +79,7 @@ public:
         }
         m_enable_table_collision = declare_parameter<bool>("enable_table_collision", true);
         m_table_frame = declare_parameter<std::string>("table_frame", "robot_base");
+        // 移动桌面z以补偿安装法兰盘的厚度
         m_table_z = declare_parameter<double>("table_z", -0.015);
         m_table_size_x = declare_parameter<double>("table_size_x", 2.0);
         m_table_size_y = declare_parameter<double>("table_size_y", 2.0);
@@ -79,18 +88,15 @@ public:
             "/display_planned_path", 10);
         m_state_validity_client = create_client<moveit_msgs::srv::GetStateValidity>(
             "/check_state_validity");
+        m_tf_buffer = std::make_unique<tf2_ros::Buffer>(get_clock());
+        m_tf_listener = std::make_unique<tf2_ros::TransformListener>(*m_tf_buffer);
         declareKinematicsParameters();
 
         bool use_sim_time = false;
         get_parameter("use_sim_time", use_sim_time);
-        RCLCPP_INFO(
-            get_logger(),
-            "use_sim_time=%s velocity_scaling=%.3f acceleration_scaling=%.3f",
-            use_sim_time ? "true" : "false",
-            m_velocity_scaling,
-            m_acceleration_scaling);
     }
 
+    // 初始化 MoveIt 接口，包括 MoveGroupInterface、规划组和末端执行器链接
     bool initializeMoveIt()
     {
         // 创建 MoveGroupInterface 对象时，内部会使用传入的node创建或者链接MoveIt的Action客户端，TF监听，规划和执行结果回调等
@@ -141,6 +147,7 @@ public:
         }
     }
 
+    // 设置桌面碰撞体，防止焊枪与桌面碰撞
     void applyTableCollisionObject()
     {
         if (!m_enable_table_collision) {
@@ -166,6 +173,7 @@ public:
         table.primitive_poses.push_back(table_pose);
         table.operation = moveit_msgs::msg::CollisionObject::ADD;
 
+        // 一个move_group节点中主要维护一份PlanningScene
         moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
         planning_scene_interface.applyCollisionObjects({table});
         RCLCPP_INFO(
@@ -174,6 +182,7 @@ public:
             m_table_frame.c_str(), m_table_z, m_table_size_x, m_table_size_y, m_table_thickness);
     }
 
+    // 定义IK求解器相关参数
     void declareKinematicsParameters()
     {
         const std::string prefix = "robot_description_kinematics." + m_planning_group + ".";
@@ -188,6 +197,7 @@ public:
             0.05);
     }
 
+    // 加载采样点
     bool loadSamples()
     {
         YAML::Node root;
@@ -226,14 +236,14 @@ public:
                 return false;
             }
 
-            sample.transform.translation.x = translation[0];
-            sample.transform.translation.y = translation[1];
-            sample.transform.translation.z = translation[2];
+            sample.T_base_tip.translation.x = translation[0];
+            sample.T_base_tip.translation.y = translation[1];
+            sample.T_base_tip.translation.z = translation[2];
 
-            sample.transform.rotation.x = rotation[0];
-            sample.transform.rotation.y = rotation[1];
-            sample.transform.rotation.z = rotation[2];
-            sample.transform.rotation.w = rotation[3];
+            sample.T_base_tip.rotation.x = rotation[0];
+            sample.T_base_tip.rotation.y = rotation[1];
+            sample.T_base_tip.rotation.z = rotation[2];
+            sample.T_base_tip.rotation.w = rotation[3];
             
             m_samples.push_back(sample);
         }
@@ -242,83 +252,76 @@ public:
         return true;
     }
 
-    bool loadToolTransform()
+    // 从 TF 读取工具标定
+    bool lookupToolTransform()
     {
-        YAML::Node root;
+        geometry_msgs::msg::TransformStamped T_tool_parent_tip_msg;
         try {
-            std::ifstream input(m_tool_calibration_file);
-            if (!input.is_open()) {
-                RCLCPP_ERROR(
-                    get_logger(), "failed to open tool calibration file: %s",
-                    m_tool_calibration_file.c_str());
-                return false;
-            }
-            root = YAML::Load(input);
-        } catch (const std::exception & ex) {
+            T_tool_parent_tip_msg = m_tf_buffer->lookupTransform(
+                m_tool_parent_frame,
+                m_tool_tip_frame,
+                tf2::TimePointZero,
+                tf2::durationFromSec(m_tool_tf_timeout_sec));
+        } catch (const tf2::TransformException & ex) {
             RCLCPP_ERROR(
-                get_logger(), "failed to load %s: %s",
-                m_tool_calibration_file.c_str(), ex.what());
+                get_logger(),
+                "failed to lookup tool transform %s -> %s: %s",
+                m_tool_parent_frame.c_str(),
+                m_tool_tip_frame.c_str(),
+                ex.what());
             return false;
         }
 
-        const YAML::Node transform = root["calibration_result"] ? root["calibration_result"] : root;
-        if (!transform["translation"] || !transform["rotation_xyzw"]) {
-            RCLCPP_ERROR(
-                get_logger(), "%s missing translation or rotation_xyzw",
-                m_tool_calibration_file.c_str());
-            return false;
-        }
+        const auto & translation = T_tool_parent_tip_msg.transform.translation;
+        const auto & rotation = T_tool_parent_tip_msg.transform.rotation;
 
-        const auto translation = transform["translation"].as<std::vector<double>>();
-        const auto rotation = transform["rotation_xyzw"].as<std::vector<double>>();
-        if (translation.size() != 3 || rotation.size() != 4) {
-            RCLCPP_ERROR(get_logger(), "tool calibration transform has invalid dimensions");
-            return false;
-        }
-
-        tf2::Quaternion q(rotation[0], rotation[1], rotation[2], rotation[3]);
+        tf2::Quaternion q(rotation.x, rotation.y, rotation.z, rotation.w);
         q.normalize();
-        m_flange_to_tip = tf2::Transform(
+        m_T_tool_parent_tip = tf2::Transform(
             q,
-            tf2::Vector3(translation[0], translation[1], translation[2]));
-        m_tip_to_flange = m_flange_to_tip.inverse();
+            tf2::Vector3(translation.x, translation.y, translation.z));
+        m_T_tip_tool_parent = m_T_tool_parent_tip.inverse();
 
         RCLCPP_INFO(
-            get_logger(), "loaded tool transform from %s; replaying tip path as flange targets",
-            m_tool_calibration_file.c_str());
+            get_logger(),
+            "loaded tool transform from TF %s -> %s; replaying tip path as tool parent targets",
+            m_tool_parent_frame.c_str(),
+            m_tool_tip_frame.c_str());
         return true;
     }
 
-    geometry_msgs::msg::Pose sampleTipToFlangePose(const PathSample & sample) const
+    // 根据采样点的位姿以及工具标定计算 tool parent 位姿
+    geometry_msgs::msg::Pose sampleTipToToolParentPose(const PathSample & sample) const
     {
         tf2::Quaternion q(
-            sample.transform.rotation.x,
-            sample.transform.rotation.y,
-            sample.transform.rotation.z,
-            sample.transform.rotation.w);
+            sample.T_base_tip.rotation.x,
+            sample.T_base_tip.rotation.y,
+            sample.T_base_tip.rotation.z,
+            sample.T_base_tip.rotation.w);
         q.normalize();
 
-        const tf2::Transform base_to_tip(
+        const tf2::Transform T_base_tip(
             q,
             tf2::Vector3(
-                sample.transform.translation.x,
-                sample.transform.translation.y,
-                sample.transform.translation.z));
-        const tf2::Transform base_to_flange = base_to_tip * m_tip_to_flange;
+                sample.T_base_tip.translation.x,
+                sample.T_base_tip.translation.y,
+                sample.T_base_tip.translation.z));
+        const tf2::Transform T_base_tool_parent = T_base_tip * m_T_tip_tool_parent;
 
         geometry_msgs::msg::Pose pose;
-        pose.position.x = base_to_flange.getOrigin().x();
-        pose.position.y = base_to_flange.getOrigin().y();
-        pose.position.z = base_to_flange.getOrigin().z();
+        pose.position.x = T_base_tool_parent.getOrigin().x();
+        pose.position.y = T_base_tool_parent.getOrigin().y();
+        pose.position.z = T_base_tool_parent.getOrigin().z();
 
-        const tf2::Quaternion flange_rotation = base_to_flange.getRotation().normalized();
-        pose.orientation.x = flange_rotation.x();
-        pose.orientation.y = flange_rotation.y();
-        pose.orientation.z = flange_rotation.z();
-        pose.orientation.w = flange_rotation.w();
+        const tf2::Quaternion tool_parent_rotation = T_base_tool_parent.getRotation().normalized();
+        pose.orientation.x = tool_parent_rotation.x();
+        pose.orientation.y = tool_parent_rotation.y();
+        pose.orientation.z = tool_parent_rotation.z();
+        pose.orientation.w = tool_parent_rotation.w();
         return pose;
     }
 
+    // 发布 MoveIt 规划的轨迹到 /display_planned_path 以便在 RViz 中预览
     void publishDisplayTrajectory(const moveit_msgs::msg::RobotTrajectory & trajectory)
     {
         if (!trajectory.joint_trajectory.points.empty()) {
@@ -345,6 +348,7 @@ public:
             std::chrono::duration<double>(m_preview_delay_sec)));
     }
 
+    // 根据当前pose作为seed计算目标pose的IK
     bool computeSeededIkTarget(const geometry_msgs::msg::Pose & pose, moveit::core::RobotState & ik_state) const
     {
         const auto current_state = m_move_group->getCurrentState(2.0);
@@ -365,17 +369,20 @@ public:
         return success;
     }
 
+    // 将目标关节状态解包到参考状态附近，以避免关节角度跳跃
     void unwrapTargetNearReference(
         const moveit::core::RobotState & reference_state,
         moveit::core::RobotState & target_state) const
     {
         constexpr double two_pi = 2.0 * M_PI;
         const auto & variable_names = m_joint_model_group->getVariableNames();
+        // 获取参考和目标的关节角度以及机械臂的关节限位
         for (const auto & name : variable_names) {
             const double reference = reference_state.getVariablePosition(name);
             const double target = target_state.getVariablePosition(name);
             const auto & bounds = target_state.getRobotModel()->getVariableBounds(name);
 
+            // 对于每个关节角，在目标角度的+-2个周期范围内寻找最接近参考的角度作为新的目标角度
             double best = target;
             double best_abs_delta = std::abs(target - reference);
             for (int offset = -2; offset <= 2; ++offset) {
@@ -394,6 +401,7 @@ public:
         }
     }
 
+    // 打印关节角度的变化量
     void logJointDeltas(
         const moveit::core::RobotState & reference_state,
         const moveit::core::RobotState & target_state,
@@ -409,20 +417,22 @@ public:
         RCLCPP_INFO(get_logger(), "%s", message.c_str());
     }
 
+    // 检查机器人状态在 MoveIt 场景中的有效性，包括关节限位和碰撞检测
     bool logStateValidity(
         const moveit::core::RobotState & state,
         const std::string & label) const
     {
         if (m_state_validity_client &&
-            m_state_validity_client->wait_for_service(std::chrono::milliseconds(200))) {
+            m_state_validity_client->wait_for_service(std::chrono::milliseconds(200))) { // 查询服务是否存在
             auto request = std::make_shared<moveit_msgs::srv::GetStateValidity::Request>();
-            moveit::core::robotStateToRobotStateMsg(state, request->robot_state);
-            request->group_name = m_planning_group;
+            moveit::core::robotStateToRobotStateMsg(state, request->robot_state); // 把当前state转为ROS消息
+            request->group_name = m_planning_group; // 指定规划组
 
-            auto future = m_state_validity_client->async_send_request(request);
+            auto future = m_state_validity_client->async_send_request(request); // send并且等待，最多2s
             const auto status = future.wait_for(std::chrono::seconds(2));
             if (status == std::future_status::ready) {
                 const auto response = future.get();
+                // 检查碰撞
                 if (response->valid) {
                     RCLCPP_INFO(get_logger(), "%s validity in move_group scene: ok", label.c_str());
                     return true;
@@ -442,12 +452,16 @@ public:
             RCLCPP_WARN(get_logger(), "%s validity service timed out; falling back to local scene", label.c_str());
         }
 
+        // 超时后，使用本地场景进行碰撞检测
+        // 检查关节限位
         bool valid = true;
         if (!state.satisfiesBounds(m_joint_model_group)) {
             RCLCPP_ERROR(get_logger(), "%s violates joint bounds", label.c_str());
             valid = false;
         }
 
+        // 临时创建空的planningscene，使用当前state进行碰撞检测
+        // 只包含机器人模型，仅能检查自碰撞
         planning_scene::PlanningScene planning_scene(m_move_group->getRobotModel());
         collision_detection::CollisionRequest request;
         collision_detection::CollisionResult result;
@@ -473,21 +487,23 @@ public:
         return valid;
     }
 
+    // 规划并根据 execute 参数决定是否执行关节目标
     bool planAndMaybeExecuteJointTarget(
         const moveit::core::RobotState & target_state,
         const std::string & label)
     {
         const auto current_state = m_move_group->getCurrentState(2.0);
         if (current_state) {
-            logJointDeltas(*current_state, target_state, label);
-            logStateValidity(*current_state, label + " start state");
-            logStateValidity(target_state, label + " target state");
+            logJointDeltas(*current_state, target_state, label); // 打印关节角度变化两
+            logStateValidity(*current_state, label + " start state"); // 打印当前状态的有效性(限位+碰撞)
+            logStateValidity(target_state, label + " target state"); // 打印目标状态的有效性(限位+碰撞)
         }
 
         m_move_group->setStartStateToCurrentState();
         m_move_group->clearPoseTargets();
         m_move_group->setJointValueTarget(target_state);
 
+        // 规划轨迹
         moveit::planning_interface::MoveGroupInterface::Plan plan;
         const auto plan_result = m_move_group->plan(plan);
         if (plan_result != moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
@@ -495,6 +511,7 @@ public:
             return false;
         }
 
+        // 发布轨迹到 /display_planned_path
         publishDisplayTrajectory(plan.trajectory_);
         if (!m_execute) {
             RCLCPP_INFO(this->get_logger(), "execute=false; only displayed %s plan", label.c_str());
@@ -510,17 +527,18 @@ public:
         return true;
     }
 
+    // 重现输入文件的采样点位姿（通过对于每个采样点直接计算 IK 并规划关节轨迹）
     bool replayJointWaypoints()
     {
         for (size_t sample_index = 1; sample_index < m_samples.size(); ++sample_index) {
-            const auto flange_pose = sampleTipToFlangePose(m_samples[sample_index]);
+            const auto tool_parent_pose = sampleTipToToolParentPose(m_samples[sample_index]);
             RCLCPP_INFO(
                 this->get_logger(),
                 "joint waypoint %zu xyz=[%.6f, %.6f, %.6f] qxyzw=[%.6f, %.6f, %.6f, %.6f]",
                 sample_index,
-                flange_pose.position.x, flange_pose.position.y, flange_pose.position.z,
-                flange_pose.orientation.x, flange_pose.orientation.y,
-                flange_pose.orientation.z, flange_pose.orientation.w);
+                tool_parent_pose.position.x, tool_parent_pose.position.y, tool_parent_pose.position.z,
+                tool_parent_pose.orientation.x, tool_parent_pose.orientation.y,
+                tool_parent_pose.orientation.z, tool_parent_pose.orientation.w);
 
             const auto current_state = m_move_group->getCurrentState(2.0);
             if (!current_state) {
@@ -528,7 +546,7 @@ public:
                 return false;
             }
             moveit::core::RobotState target_state(*current_state);
-            if (!computeSeededIkTarget(flange_pose, target_state)) {
+            if (!computeSeededIkTarget(tool_parent_pose, target_state)) {
                 RCLCPP_ERROR(this->get_logger(), "waypoint %zu IK 失败", sample_index);
                 return false;
             }
@@ -540,20 +558,21 @@ public:
         return true;
     }
 
+    // 重现输入文件的采样点位姿（在采样点之间插值Cartesian Path后规划关节轨迹）
     bool replayCartesianWaypoints()
     {
         std::vector<geometry_msgs::msg::Pose> waypoints;
         for (size_t sample_index = 1; sample_index < m_samples.size(); ++sample_index) {
             const auto & sample = m_samples[sample_index];
-            auto flange_pose = sampleTipToFlangePose(sample);
+            auto tool_parent_pose = sampleTipToToolParentPose(sample);
             RCLCPP_INFO(
                 this->get_logger(),
-                "flange waypoint %zu xyz=[%.6f, %.6f, %.6f] qxyzw=[%.6f, %.6f, %.6f, %.6f]",
+                "tool parent waypoint %zu xyz=[%.6f, %.6f, %.6f] qxyzw=[%.6f, %.6f, %.6f, %.6f]",
                 sample_index,
-                flange_pose.position.x, flange_pose.position.y, flange_pose.position.z,
-                flange_pose.orientation.x, flange_pose.orientation.y,
-                flange_pose.orientation.z, flange_pose.orientation.w);
-            waypoints.push_back(flange_pose);
+                tool_parent_pose.position.x, tool_parent_pose.position.y, tool_parent_pose.position.z,
+                tool_parent_pose.orientation.x, tool_parent_pose.orientation.y,
+                tool_parent_pose.orientation.z, tool_parent_pose.orientation.w);
+            waypoints.push_back(tool_parent_pose);
         }
 
         if (waypoints.empty()) {
@@ -595,13 +614,13 @@ public:
             tf2::Vector3(pose.position.x, pose.position.y, pose.position.z));
     }
 
-    geometry_msgs::msg::Pose transformToPose(const tf2::Transform & transform) const
+    geometry_msgs::msg::Pose transformToPose(const tf2::Transform & T) const
     {
         geometry_msgs::msg::Pose pose;
-        pose.position.x = transform.getOrigin().x();
-        pose.position.y = transform.getOrigin().y();
-        pose.position.z = transform.getOrigin().z();
-        const auto q = transform.getRotation().normalized();
+        pose.position.x = T.getOrigin().x();
+        pose.position.y = T.getOrigin().y();
+        pose.position.z = T.getOrigin().z();
+        const auto q = T.getRotation().normalized();
         pose.orientation.x = q.x();
         pose.orientation.y = q.y();
         pose.orientation.z = q.z();
@@ -609,15 +628,16 @@ public:
         return pose;
     }
 
+    // 在两个位姿之间进行线性插值，t为插值参数，范围为[0, 1]
     geometry_msgs::msg::Pose interpolatePose(
         const geometry_msgs::msg::Pose & start,
         const geometry_msgs::msg::Pose & goal,
         double t) const
     {
-        const auto start_tf = poseToTransform(start);
-        const auto goal_tf = poseToTransform(goal);
-        const auto p = start_tf.getOrigin().lerp(goal_tf.getOrigin(), t);
-        const auto q = start_tf.getRotation().slerp(goal_tf.getRotation(), t).normalized();
+        const auto T_base_start = poseToTransform(start);
+        const auto T_base_goal = poseToTransform(goal);
+        const auto p = T_base_start.getOrigin().lerp(T_base_goal.getOrigin(), t);
+        const auto q = T_base_start.getRotation().slerp(T_base_goal.getRotation(), t).normalized();
         return transformToPose(tf2::Transform(q, p));
     }
 
@@ -632,9 +652,9 @@ public:
         double total_distance = 0.0;
 
         for (const auto & waypoint : waypoints) {
-            const auto start_tf = poseToTransform(segment_start);
-            const auto goal_tf = poseToTransform(waypoint);
-            const double distance = start_tf.getOrigin().distance(goal_tf.getOrigin());
+            const auto T_base_segment_start = poseToTransform(segment_start);
+            const auto T_base_waypoint = poseToTransform(waypoint);
+            const double distance = T_base_segment_start.getOrigin().distance(T_base_waypoint.getOrigin());
             const std::size_t step_count = std::max<std::size_t>(
                 1, static_cast<std::size_t>(std::ceil(distance / m_cartesian_eef_step)));
 
@@ -696,9 +716,9 @@ public:
 
         for (std::size_t waypoint_index = 0; waypoint_index < waypoints.size(); ++waypoint_index) {
             const auto & segment_goal = waypoints[waypoint_index];
-            const auto start_tf = poseToTransform(segment_start);
-            const auto goal_tf = poseToTransform(segment_goal);
-            const double distance = start_tf.getOrigin().distance(goal_tf.getOrigin());
+            const auto T_base_segment_start = poseToTransform(segment_start);
+            const auto T_base_segment_goal = poseToTransform(segment_goal);
+            const double distance = T_base_segment_start.getOrigin().distance(T_base_segment_goal.getOrigin());
             const std::size_t step_count = std::max<std::size_t>(
                 1, static_cast<std::size_t>(std::ceil(distance / m_cartesian_eef_step)));
 
@@ -842,10 +862,10 @@ public:
 
         // 首先移动到轨迹开始点
         const auto & first_sample = m_samples[0];
-        const geometry_msgs::msg::Pose pose = sampleTipToFlangePose(first_sample);
+        const geometry_msgs::msg::Pose pose = sampleTipToToolParentPose(first_sample);
         RCLCPP_INFO(
             this->get_logger(),
-            "initial flange target xyz=[%.6f, %.6f, %.6f] qxyzw=[%.6f, %.6f, %.6f, %.6f]",
+            "initial tool parent target xyz=[%.6f, %.6f, %.6f] qxyzw=[%.6f, %.6f, %.6f, %.6f]",
             pose.position.x, pose.position.y, pose.position.z,
             pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w);
         const auto current_state = m_move_group->getCurrentState(2.0);
@@ -892,7 +912,9 @@ private:
     std::string m_model;
     std::string m_planning_group;
     std::string m_input_file;
-    std::string m_tool_calibration_file;
+    std::string m_tool_parent_frame;
+    std::string m_tool_tip_frame;
+    double m_tool_tf_timeout_sec;
     double m_preview_delay_sec;
     bool m_execute;
     std::string m_pose_reference_frame;
@@ -912,10 +934,12 @@ private:
     double m_table_size_x;
     double m_table_size_y;
     double m_table_thickness;
-    tf2::Transform m_flange_to_tip;
-    tf2::Transform m_tip_to_flange;
+    tf2::Transform m_T_tool_parent_tip;
+    tf2::Transform m_T_tip_tool_parent;
     rclcpp::Publisher<moveit_msgs::msg::DisplayTrajectory>::SharedPtr m_display_pub;
     rclcpp::Client<moveit_msgs::srv::GetStateValidity>::SharedPtr m_state_validity_client;
+    std::unique_ptr<tf2_ros::Buffer> m_tf_buffer;
+    std::unique_ptr<tf2_ros::TransformListener> m_tf_listener;
 
     std::vector<PathSample> m_samples;
     std::unique_ptr<
@@ -979,7 +1003,7 @@ int main(int argc, char ** argv)
         return 1;
     }
 
-    if (!node->loadToolTransform()) {
+    if (!node->lookupToolTransform()) {
         executor.cancel();
         if (spin_thread.joinable()) {
             spin_thread.join();

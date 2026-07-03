@@ -24,7 +24,7 @@
 struct PathSample
 {
   rclcpp::Time stamp;
-  geometry_msgs::msg::Transform transform;
+  geometry_msgs::msg::Transform T_base_tip;
 };
 
 class CollectPathNode : public rclcpp::Node
@@ -182,15 +182,16 @@ private:
   bool sampleOnce(const std::string & reason)
   {
     try {
-      const auto transform = m_tf_buffer->lookupTransform( // 查找机械臂基座标系到笔尖坐标系的变换
+      // T_A_B means the pose of frame B in frame A.
+      const auto T_base_tip_msg = m_tf_buffer->lookupTransform(
         m_base_frame,
         m_tip_frame,
         tf2::TimePointZero,
         tf2::durationFromSec(m_lookup_timeout_sec));
 
       PathSample sample;
-      sample.stamp = transform.header.stamp;
-      sample.transform = transform.transform;
+      sample.stamp = T_base_tip_msg.header.stamp;
+      sample.T_base_tip = T_base_tip_msg.transform;
 
       std::size_t sample_count = 0;
       {
@@ -199,8 +200,8 @@ private:
         sample_count = m_samples.size();
       }
 
-      const auto & p = sample.transform.translation;
-      const auto & q = sample.transform.rotation;
+      const auto & p = sample.T_base_tip.translation;
+      const auto & q = sample.T_base_tip.rotation;
       RCLCPP_INFO(
         get_logger(),
         "sample %zu (%s): p=[%.4f %.4f %.4f], q=[%.4f %.4f %.4f %.4f]",
@@ -243,8 +244,8 @@ private:
     YAML::Node samples_node(YAML::NodeType::Sequence);
     for (std::size_t i = 0; i < samples.size(); ++i) {
       const auto & sample = samples[i];
-      const auto & p = sample.transform.translation;
-      const auto & q = sample.transform.rotation;
+      const auto & p = sample.T_base_tip.translation;
+      const auto & q = sample.T_base_tip.rotation;
 
       YAML::Node item;
       item["index"] = static_cast<int>(i);

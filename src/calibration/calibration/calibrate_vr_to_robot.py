@@ -12,6 +12,8 @@ from tf2_ros import TransformException
 from tf2_ros import TransformListener
 
 
+# Transform naming convention: T_A_B means the pose of frame B in frame A.
+# R_A_B and t_A_B follow the same direction.
 def rotation_matrix_to_quaternion(rotation):
     trace = np.trace(rotation)
 
@@ -68,29 +70,29 @@ class VrToRobotSampleCollector(Node):
         self.samples = []
 
     def sample_once(self):
-        tracker_tip_transform = self.lookup_transform(
+        T_tracker_parent_tip = self.lookup_transform(
             self.tracker_parent_frame,
             self.tracker_tip_frame,
             "tracker tip",
         )
-        robot_tip_transform = self.lookup_transform(
+        T_robot_parent_tip = self.lookup_transform(
             self.robot_parent_frame,
             self.robot_tip_frame,
             "robot tip",
         )
 
-        if tracker_tip_transform is None or robot_tip_transform is None:
+        if T_tracker_parent_tip is None or T_robot_parent_tip is None:
             self.get_logger().warn("sample skipped because at least one TF lookup failed")
             return False
 
         self.samples.append({
             "index": len(self.samples) + 1,
-            "tracker_tip": tracker_tip_transform,
-            "robot_tip": robot_tip_transform,
+            "tracker_tip": T_tracker_parent_tip,
+            "robot_tip": T_robot_parent_tip,
         })
 
-        tracker_xyz = tracker_tip_transform["translation"]
-        robot_xyz = robot_tip_transform["translation"]
+        tracker_xyz = T_tracker_parent_tip["translation"]
+        robot_xyz = T_robot_parent_tip["translation"]
         self.get_logger().info(
             "sample %d: teaching_pen_tip xyz=[%.6f, %.6f, %.6f], "
             "welding_torch_tip xyz=[%.6f, %.6f, %.6f]"
@@ -108,7 +110,7 @@ class VrToRobotSampleCollector(Node):
 
     def lookup_transform(self, parent_frame, child_frame, label):
         try:
-            transform = self.tf_buffer.lookup_transform(
+            T_parent_child_msg = self.tf_buffer.lookup_transform(
                 parent_frame,
                 child_frame,
                 Time(),
@@ -118,17 +120,17 @@ class VrToRobotSampleCollector(Node):
             self.get_logger().warn(f"{label} TF lookup failed: {error}")
             return None
 
-        t = transform.transform.translation
-        q = transform.transform.rotation
-        stamp = transform.header.stamp
+        t = T_parent_child_msg.transform.translation
+        q = T_parent_child_msg.transform.rotation
+        stamp = T_parent_child_msg.header.stamp
 
         return {
             "stamp": {
                 "sec": int(stamp.sec),
                 "nanosec": int(stamp.nanosec),
             },
-            "parent_frame": transform.header.frame_id,
-            "child_frame": transform.child_frame_id,
+            "parent_frame": T_parent_child_msg.header.frame_id,
+            "child_frame": T_parent_child_msg.child_frame_id,
             "translation": [float(t.x), float(t.y), float(t.z)],
             "rotation_xyzw": [float(q.x), float(q.y), float(q.z), float(q.w)],
         }
@@ -155,15 +157,15 @@ class VrToRobotSampleCollector(Node):
         covariance = tracker_centered.T @ robot_centered
         u, singular_values, vt = np.linalg.svd(covariance)
 
-        rotation = vt.T @ u.T
-        if np.linalg.det(rotation) < 0.0:
+        R_robot_vr = vt.T @ u.T
+        if np.linalg.det(R_robot_vr) < 0.0:
             vt[-1, :] *= -1.0
-            rotation = vt.T @ u.T
+            R_robot_vr = vt.T @ u.T
 
-        translation = robot_centroid - rotation @ tracker_centroid
-        transformed_tracker_points = (rotation @ tracker_points.T).T + translation
-        errors = np.linalg.norm(transformed_tracker_points - robot_points, axis=1)
-        quaternion = rotation_matrix_to_quaternion(rotation)
+        t_robot_vr = robot_centroid - R_robot_vr @ tracker_centroid
+        tracker_points_in_robot = (R_robot_vr @ tracker_points.T).T + t_robot_vr
+        errors = np.linalg.norm(tracker_points_in_robot - robot_points, axis=1)
+        quaternion = rotation_matrix_to_quaternion(R_robot_vr)
 
         self.get_logger().info(
             "computed %s -> %s from %d samples, mean error %.6f m, max error %.6f m"
@@ -184,9 +186,9 @@ class VrToRobotSampleCollector(Node):
             ),
             "parent_frame": self.robot_parent_frame,
             "child_frame": self.tracker_parent_frame,
-            "translation": translation.tolist(),
+            "translation": t_robot_vr.tolist(),
             "rotation_xyzw": quaternion.tolist(),
-            "rotation_matrix": rotation.tolist(),
+            "rotation_matrix": R_robot_vr.tolist(),
             "sample_count": len(self.samples),
             "singular_values": singular_values.tolist(),
             "mean_error": float(errors.mean()),

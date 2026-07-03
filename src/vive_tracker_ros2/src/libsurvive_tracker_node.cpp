@@ -346,14 +346,14 @@ private:
     }
 
     if (m_publish_tf && publish_as_primary) {
-      geometry_msgs::msg::TransformStamped transform;
-      transform.header = message.header;
-      transform.child_frame_id = m_child_frame_id;
-      transform.transform.translation.x = message.pose.position.x;
-      transform.transform.translation.y = message.pose.position.y;
-      transform.transform.translation.z = message.pose.position.z;
-      transform.transform.rotation = message.pose.orientation;
-      m_tf_broadcaster->sendTransform(transform);
+      geometry_msgs::msg::TransformStamped T_parent_child_msg;
+      T_parent_child_msg.header = message.header;
+      T_parent_child_msg.child_frame_id = m_child_frame_id;
+      T_parent_child_msg.transform.translation.x = message.pose.position.x;
+      T_parent_child_msg.transform.translation.y = message.pose.position.y;
+      T_parent_child_msg.transform.translation.z = message.pose.position.z;
+      T_parent_child_msg.transform.rotation = message.pose.orientation;
+      m_tf_broadcaster->sendTransform(T_parent_child_msg);
     }
 
     if (publish_as_primary) {

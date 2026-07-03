@@ -14,6 +14,8 @@ from tf2_ros import TransformException
 from tf2_ros import TransformListener
 
 
+# Transform naming convention: T_A_B means the pose of frame B in frame A.
+# R_A_B and t_A_B follow the same direction.
 def rotation_matrix_to_quaternion(rotation):
     return Rotation.from_matrix(rotation).as_quat().tolist()
 
@@ -27,21 +29,21 @@ def quaternion_to_rotation_matrix(quaternion):
 
 
 
-def rigid_transform_svd(source_points, target_points):
-    source_centroid = source_points.mean(axis=0)
-    target_centroid = target_points.mean(axis=0)
-    source_centered = source_points - source_centroid
-    target_centered = target_points - target_centroid
+def rigid_transform_svd(points_in_source, points_in_target):
+    source_centroid = points_in_source.mean(axis=0)
+    target_centroid = points_in_target.mean(axis=0)
+    source_centered = points_in_source - source_centroid
+    target_centered = points_in_target - target_centroid
 
     covariance = source_centered.T @ target_centered
     u, singular_values, vt = np.linalg.svd(covariance)
-    rotation = vt.T @ u.T
-    if np.linalg.det(rotation) < 0.0:
+    R_target_source = vt.T @ u.T
+    if np.linalg.det(R_target_source) < 0.0:
         vt[-1, :] *= -1.0
-        rotation = vt.T @ u.T
+        R_target_source = vt.T @ u.T
 
-    translation = target_centroid - rotation @ source_centroid
-    return rotation, translation, singular_values
+    t_target_source = target_centroid - R_target_source @ source_centroid
+    return R_target_source, t_target_source, singular_values
 
 
 class ToolVrJointCalibrator(Node):
@@ -72,7 +74,7 @@ class ToolVrJointCalibrator(Node):
 
     def lookup_transform(self, parent_frame, child_frame, label):
         try:
-            transform = self.tf_buffer.lookup_transform(
+            T_parent_child_msg = self.tf_buffer.lookup_transform(
                 parent_frame,
                 child_frame,
                 Time(),
@@ -82,45 +84,45 @@ class ToolVrJointCalibrator(Node):
             self.get_logger().warn(f"{label} TF lookup failed: {error}")
             return None
 
-        t = transform.transform.translation
-        q = transform.transform.rotation
-        stamp = transform.header.stamp
+        t = T_parent_child_msg.transform.translation
+        q = T_parent_child_msg.transform.rotation
+        stamp = T_parent_child_msg.header.stamp
 
         return {
             "stamp": {
                 "sec": int(stamp.sec),
                 "nanosec": int(stamp.nanosec),
             },
-            "parent_frame": transform.header.frame_id,
-            "child_frame": transform.child_frame_id,
+            "parent_frame": T_parent_child_msg.header.frame_id,
+            "child_frame": T_parent_child_msg.child_frame_id,
             "translation": [float(t.x), float(t.y), float(t.z)],
             "rotation_xyzw": [float(q.x), float(q.y), float(q.z), float(q.w)],
         }
 
     def sample_once(self):
-        robot_flange_transform = self.lookup_transform(
+        T_robot_parent_flange = self.lookup_transform(
             self.robot_parent_frame,
             self.robot_flange_frame,
             "robot flange",
         )
-        tracker_tip_transform = self.lookup_transform(
+        T_tracker_parent_tip = self.lookup_transform(
             self.tracker_parent_frame,
             self.tracker_tip_frame,
             "tracker tip",
         )
 
-        if robot_flange_transform is None or tracker_tip_transform is None:
+        if T_robot_parent_flange is None or T_tracker_parent_tip is None:
             self.get_logger().warn("sample skipped because at least one TF lookup failed")
             return False
 
         self.samples.append({
             "index": len(self.samples) + 1,
-            "robot_flange": robot_flange_transform,
-            "tracker_tip": tracker_tip_transform,
+            "robot_flange": T_robot_parent_flange,
+            "tracker_tip": T_tracker_parent_tip,
         })
 
-        robot_xyz = robot_flange_transform["translation"]
-        tracker_xyz = tracker_tip_transform["translation"]
+        robot_xyz = T_robot_parent_flange["translation"]
+        tracker_xyz = T_tracker_parent_tip["translation"]
         self.get_logger().info(
             "sample %d: %s xyz=[%.6f, %.6f, %.6f], %s xyz=[%.6f, %.6f, %.6f]"
             % (
@@ -156,14 +158,14 @@ class ToolVrJointCalibrator(Node):
             rotation @ tool_offset + translation
             for rotation, translation in zip(flange_rotations, flange_translations)
         ])
-        vr_to_robot_rotation, vr_to_robot_translation, _ = rigid_transform_svd(
+        R_robot_vr, t_robot_vr, _ = rigid_transform_svd(
             tracker_points,
             robot_tip_points,
         )
         return np.hstack([
             tool_offset,
-            Rotation.from_matrix(vr_to_robot_rotation).as_rotvec(),
-            vr_to_robot_translation,
+            Rotation.from_matrix(R_robot_vr).as_rotvec(),
+            t_robot_vr,
         ])
 
     def compute_calibration(self):
@@ -191,8 +193,8 @@ class ToolVrJointCalibrator(Node):
 
         def residual(parameters):
             tool_offset = parameters[0:3]
-            vr_to_robot_rotation = Rotation.from_rotvec(parameters[3:6]).as_matrix()
-            vr_to_robot_translation = parameters[6:9]
+            R_robot_vr = Rotation.from_rotvec(parameters[3:6]).as_matrix()
+            t_robot_vr = parameters[6:9]
 
             rows = []
             for flange_rotation, flange_translation, tracker_point in zip(
@@ -201,8 +203,8 @@ class ToolVrJointCalibrator(Node):
                 tracker_points,
             ):
                 robot_tip = flange_rotation @ tool_offset + flange_translation
-                tracker_tip_in_robot = vr_to_robot_rotation @ tracker_point + vr_to_robot_translation
-                rows.append(robot_tip - tracker_tip_in_robot)
+                p_robot_tip_from_vr = R_robot_vr @ tracker_point + t_robot_vr
+                rows.append(robot_tip - p_robot_tip_from_vr)
             return np.hstack(rows)
 
         result = least_squares(
@@ -214,15 +216,15 @@ class ToolVrJointCalibrator(Node):
         )
 
         tool_offset = result.x[0:3]
-        vr_to_robot_rotation = Rotation.from_rotvec(result.x[3:6]).as_matrix()
-        vr_to_robot_translation = result.x[6:9]
+        R_robot_vr = Rotation.from_rotvec(result.x[3:6]).as_matrix()
+        t_robot_vr = result.x[6:9]
 
         robot_tip_points = np.array([
             rotation @ tool_offset + translation
             for rotation, translation in zip(flange_rotations, flange_translations)
         ])
-        tracker_tip_in_robot = (vr_to_robot_rotation @ tracker_points.T).T + vr_to_robot_translation
-        errors = np.linalg.norm(robot_tip_points - tracker_tip_in_robot, axis=1)
+        p_robot_tip_from_vr = (R_robot_vr @ tracker_points.T).T + t_robot_vr
+        errors = np.linalg.norm(robot_tip_points - p_robot_tip_from_vr, axis=1)
 
         self.get_logger().info(
             "computed joint calibration from %d samples, tool offset=[%.6f, %.6f, %.6f] m, "
@@ -253,9 +255,9 @@ class ToolVrJointCalibrator(Node):
             "vr_to_robot_transform": {
                 "parent_frame": self.robot_parent_frame,
                 "child_frame": self.tracker_parent_frame,
-                "translation": vr_to_robot_translation.tolist(),
-                "rotation_xyzw": rotation_matrix_to_quaternion(vr_to_robot_rotation),
-                "rotation_matrix": vr_to_robot_rotation.tolist(),
+                "translation": t_robot_vr.tolist(),
+                "rotation_xyzw": rotation_matrix_to_quaternion(R_robot_vr),
+                "rotation_matrix": R_robot_vr.tolist(),
             },
             "sample_count": len(self.samples),
             "success": bool(result.success),

@@ -426,14 +426,14 @@ private:
 
         if (m_publish_tf) {
           // TF 表达的是 frame_id -> child_frame_id 的坐标变换。
-          geometry_msgs::msg::TransformStamped transform;
-          transform.header = pose_msg.header;
-          transform.child_frame_id = m_child_frame_id;
-          transform.transform.translation.x = pose_msg.pose.position.x;
-          transform.transform.translation.y = pose_msg.pose.position.y;
-          transform.transform.translation.z = pose_msg.pose.position.z;
-          transform.transform.rotation = pose_msg.pose.orientation;
-          m_tf_broadcaster->sendTransform(transform);
+          geometry_msgs::msg::TransformStamped T_parent_child_msg;
+          T_parent_child_msg.header = pose_msg.header;
+          T_parent_child_msg.child_frame_id = m_child_frame_id;
+          T_parent_child_msg.transform.translation.x = pose_msg.pose.position.x;
+          T_parent_child_msg.transform.translation.y = pose_msg.pose.position.y;
+          T_parent_child_msg.transform.translation.z = pose_msg.pose.position.z;
+          T_parent_child_msg.transform.rotation = pose_msg.pose.orientation;
+          m_tf_broadcaster->sendTransform(T_parent_child_msg);
         }
       }
     }

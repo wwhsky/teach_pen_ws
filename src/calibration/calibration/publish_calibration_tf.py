@@ -31,16 +31,16 @@ class CalibrationTfPublisher(Node):
 
         if self.transforms:
             self.broadcaster.sendTransform(self.transforms)
-            for transform in self.transforms:
+            for T_parent_child_msg in self.transforms:
                 self.get_logger().info(
                     "published static TF %s -> %s"
-                    % (transform.header.frame_id, transform.child_frame_id)
+                    % (T_parent_child_msg.header.frame_id, T_parent_child_msg.child_frame_id)
                 )
         else:
             self.get_logger().warn("no calibration TFs were loaded")
 
     def load_transforms(self):
-        transforms = []
+        T_parent_child_msgs = []
         for file_name in self.files:
             path = Path(file_name).expanduser()
             if not path.exists():
@@ -51,9 +51,9 @@ class CalibrationTfPublisher(Node):
             if transform_data is None:
                 continue
 
-            transforms.append(self.make_transform(transform_data, path))
+            T_parent_child_msgs.append(self.make_transform(transform_data, path))
 
-        return transforms
+        return T_parent_child_msgs
 
     def load_transform_data(self, path):
         try:
@@ -94,18 +94,18 @@ class CalibrationTfPublisher(Node):
         if len(rotation) != 4:
             raise ValueError(f"{path} rotation_xyzw must contain 4 values")
 
-        transform = TransformStamped()
-        transform.header.stamp = self.get_clock().now().to_msg()
-        transform.header.frame_id = str(transform_data["parent_frame"])
-        transform.child_frame_id = str(transform_data["child_frame"])
-        transform.transform.translation.x = float(translation[0])
-        transform.transform.translation.y = float(translation[1])
-        transform.transform.translation.z = float(translation[2])
-        transform.transform.rotation.x = rotation[0]
-        transform.transform.rotation.y = rotation[1]
-        transform.transform.rotation.z = rotation[2]
-        transform.transform.rotation.w = rotation[3]
-        return transform
+        T_parent_child_msg = TransformStamped()
+        T_parent_child_msg.header.stamp = self.get_clock().now().to_msg()
+        T_parent_child_msg.header.frame_id = str(transform_data["parent_frame"])
+        T_parent_child_msg.child_frame_id = str(transform_data["child_frame"])
+        T_parent_child_msg.transform.translation.x = float(translation[0])
+        T_parent_child_msg.transform.translation.y = float(translation[1])
+        T_parent_child_msg.transform.translation.z = float(translation[2])
+        T_parent_child_msg.transform.rotation.x = rotation[0]
+        T_parent_child_msg.transform.rotation.y = rotation[1]
+        T_parent_child_msg.transform.rotation.z = rotation[2]
+        T_parent_child_msg.transform.rotation.w = rotation[3]
+        return T_parent_child_msg
 
 
 def main():

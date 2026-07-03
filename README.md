@@ -7,6 +7,159 @@
 - `teach_pen`：项目自己的业务包，包含示教路径采集、路径回放、焊缝感知和 JAKA 轨迹执行节点。
 - `jaka_ros2`：JAKA 机械臂的描述、MoveIt 配置、仿真和实机接口。
 
+## ROS2 通信关系
+
+本项目里主要用到五类 ROS2 通信方式：
+
+```text
+Topic      连续数据流
+Service    一次请求，一次响应
+Action     长任务，支持反馈和取消
+Parameter  节点配置
+TF         坐标变换树
+```
+
+### Topic
+
+Topic 用于持续发布数据，发布端不关心有多少订阅端。项目里常见 topic：
+
+| Topic | 类型 | 作用 |
+|---|---|---|
+| `/joint_states` | `sensor_msgs/msg/JointState` | 当前机械臂关节状态，MoveIt 和 RViz 都依赖它 |
+| `/vive_tracker/pose` | `geometry_msgs/msg/PoseStamped` | Vive Tracker 位姿 |
+| `/vive_tracker/buttons` | `sensor_msgs/msg/Joy` | Tracker 按键和轴数据，主要由 libsurvive 路线使用 |
+| `/vive_tracker/visibility` | `std_msgs/msg/Float32MultiArray` | libsurvive 下基站可见性和光学观测数量 |
+| `/seam_tracking/measured_path` | `nav_msgs/msg/Path` | 点云提取出的焊缝路径 |
+| `/seam_tracking/debug_cloud` | `sensor_msgs/msg/PointCloud2` | 焊缝感知调试点云 |
+| `/display_planned_path` | `moveit_msgs/msg/DisplayTrajectory` | `replay_path_node` 发布给 RViz 的轨迹预览 |
+
+适合用 topic 的情况：tracker 位姿、点云、关节状态、调试可视化等连续数据。
+
+### Service
+
+Service 是一次请求对应一次响应，适合查询或短任务。项目里常见 service：
+
+| Service | 作用 |
+|---|---|
+| `/check_state_validity` | 向 MoveIt 查询某个机器人状态是否碰撞、越界 |
+| `/compute_ik` | MoveIt IK 求解 |
+| `/compute_fk` | MoveIt FK 求解 |
+| `/controller_manager/list_controllers` | 查询 ros2_control controller 状态 |
+| `/controller_manager/switch_controller` | 切换 controller |
+
+`replay_path_node` 里主动使用了 `/check_state_validity`，用于打印更明确的碰撞诊断。
+
+### Action
+
+Action 可以理解为“带反馈和取消能力的长任务接口”。它不是连续 service，而是：
+
+```text
+goal -> accepted / rejected
+     -> feedback ...
+     -> result
+```
+
+本项目最关键的 action 是：
+
+```text
+/jaka_zu5_controller/follow_joint_trajectory
+```
+
+类型是：
+
+```text
+control_msgs/action/FollowJointTrajectory
+```
+
+MoveIt 规划完成后会把关节轨迹发到这个 action。谁提供这个 action server，
+谁就是当前执行端：
+
+```text
+Gazebo ros2_control             仿真执行
+fake ros2_control               RViz fake 执行
+jaka_trajectory_executor_node   项目自己的实机执行端
+jaka_planner/moveit_server      JAKA 官方 demo 执行端
+```
+
+MoveIt 自己也有 action，例如：
+
+```text
+/move_action
+/execute_trajectory
+```
+
+这些是 RViz 或 MoveGroupInterface 和 `move_group` 之间的规划/执行接口。
+
+### Parameter
+
+Parameter 用于配置节点行为。项目里常见参数：
+
+| 节点 | 参数 | 作用 |
+|---|---|---|
+| `replay_path_node` | `use_sim_time` | Gazebo 下设为 `true`，实机默认 `false` |
+| `replay_path_node` | `velocity_scaling` / `acceleration_scaling` | 轨迹速度/加速度比例 |
+| `replay_path_node` | `input_file` | 读取的路径 YAML |
+| `replay_path_node` | `path_mode` | `cartesian` 或 `joint` |
+| `collect_path_node` | `base_frame` / `tip_frame` | 采集哪两个坐标系之间的位姿 |
+| `jaka_trajectory_executor_node` | `ip` | JAKA 控制器 IP |
+| `vive_tracker_node` | `tracking_universe` | OpenVR 输出位姿的坐标空间 |
+
+查看参数：
+
+```bash
+ros2 param list /replay_path_node
+ros2 param get /replay_path_node use_sim_time
+ros2 param dump /replay_path_node
+```
+
+### TF
+
+TF 用于维护坐标树。它底层也是 topic：
+
+```text
+/tf
+/tf_static
+```
+
+但在机器人项目里通常单独看待。当前项目核心 TF 关系是：
+
+```text
+world
+└── link0
+    └── robot_base
+        ├── Link1 ... Link6
+        │   └── robot_flange
+        │       └── tool_assembly
+        ├── steamvr_base
+        │   └── tracker_frame
+        │       └── teaching_pen_tip
+        ├── welding_torch_tip
+        └── workpiece_frame
+```
+
+其中 JAKA 机械臂本体的 `link0`、`Link1` 到 `Link6` 来自 URDF 和
+`robot_state_publisher`；`robot_base`、`robot_flange` 是项目添加的语义坐标系；
+`steamvr_base`、`teaching_pen_tip`、`welding_torch_tip`、`workpiece_frame`
+由标定结果发布。
+
+常用检查命令：
+
+```bash
+ros2 run tf2_ros tf2_echo robot_base teaching_pen_tip
+ros2 run tf2_ros tf2_echo robot_base welding_torch_tip
+ros2 run tf2_tools view_frames
+```
+
+### 选型原则
+
+```text
+连续数据流        -> Topic
+一次请求一次结果  -> Service
+长时间任务        -> Action
+节点配置          -> Parameter
+坐标关系          -> TF
+```
+
 ## Vive Tracker 追踪
 
 `vive_tracker_ros2` 现在有两条追踪路线：
@@ -422,7 +575,7 @@ executor 抢 `/joint_states` 或 trajectory action。
 | 节点 | 输入 | 输出 | 作用 |
 |---|---|---|---|
 | `collect_path_node` | TF: `robot_base <- teaching_pen_tip` | `config/paths/*.yaml` | 用示教笔采集 tip 路径 |
-| `replay_path_node` | 路径 YAML、`welding_torch_tip.yaml`、MoveIt | MoveIt 规划/执行请求 | 将 tip 路径转换为法兰目标并复现 |
+| `replay_path_node` | 路径 YAML、TF: `robot_flange <- welding_torch_tip`、MoveIt | MoveIt 规划/执行请求 | 将 tip 路径转换为法兰目标并复现 |
 | `jaka_trajectory_executor_node` | `FollowJointTrajectory` action | JAKA SDK `servo_j`、`/joint_states` | 项目自己的实机执行端 |
 | `seam_perception_node` | ROI 点云或点云文件 | `/seam_tracking/measured_path` | 从点云中提取焊缝线 |
 
@@ -469,7 +622,7 @@ samples:
 
 ### 路径回放
 
-`replay_path_node` 读取路径 YAML 后，会加载工具标定：
+`replay_path_node` 读取路径 YAML 后，会从 TF 读取工具变换：
 
 ```text
 robot_flange -> welding_torch_tip
@@ -477,6 +630,8 @@ robot_flange -> welding_torch_tip
 
 然后把每个 `base -> tip` 样本换算成 `base -> Link6/flange` 目标。这样 MoveIt
 规划的是机械臂真实末端 link，焊枪尖会尽量复现示教笔尖采集到的路径。
+运行前需要先启动 `publish_calibration_tf` 或其他 TF 发布者，确保 TF 树中存在
+`robot_flange -> welding_torch_tip`。
 
 运行示例：
 
@@ -486,7 +641,6 @@ source install/setup.bash
 ros2 run teach_pen replay_path_node --ros-args \
   -p model:=zu5 \
   -p input_file:=config/paths/demo_path.yaml \
-  -p tool_calibration_file:=config/calibration/welding_torch_tip.yaml \
   -p execute:=true \
   -p path_mode:=cartesian
 ```
@@ -505,7 +659,7 @@ ros2 run teach_pen replay_path_node --ros-args \
 ```text
 初始化 MoveGroupInterface
 -> 读取 samples
--> 读取 tool_calibration_file
+-> 从 TF 读取 tool_parent_frame -> tool_tip_frame
 -> 添加 table collision
 -> 规划并执行 home start
 -> 用 seeded IK 移动到第一个采样点
@@ -522,7 +676,9 @@ ros2 run teach_pen replay_path_node --ros-args \
 model                    default: zu5
 pose_reference_frame     default: robot_base
 end_effector_link        default: Link6
-tool_calibration_file    default: config/calibration/welding_torch_tip.yaml
+tool_parent_frame        default: robot_flange
+tool_tip_frame           default: welding_torch_tip
+tool_tf_timeout_sec      default: 2.0
 path_mode                cartesian / joint
 cartesian_eef_step       default: 0.001
 cartesian_min_fraction   default: 1.0
@@ -813,3 +969,48 @@ ros2 launch jaka_zu5_moveit_config demo.launch.py use_rviz_sim:=true
 - 完成相机手眼标定，发布相机坐标系 TF。
 - 用多组机械臂姿态验证工具不会与本体发生错误碰撞。
 - 将焊缝路径转换为焊枪 TCP 路径，并在 MoveIt 中进行笛卡尔规划。
+
+## TODO
+
+### MoveIt 参数外置
+
+当前 `replay_path_node.cpp` 里仍然有一部分 MoveIt kinematics 参数兜底声明：
+
+```cpp
+robot_description_kinematics.<planning_group>.kinematics_solver
+robot_description_kinematics.<planning_group>.kinematics_solver_search_resolution
+robot_description_kinematics.<planning_group>.kinematics_solver_timeout
+```
+
+短期这样可以保证直接 `ros2 run teach_pen replay_path_node` 时也能找到 IK solver。
+但从项目结构上看，MoveIt 配置更适合放到 YAML 和 launch 里，而不是写在业务节点
+C++ 代码里。
+
+建议后续整理为：
+
+```text
+config/moveit/kinematics.yaml
+    保存 robot_description_kinematics 配置。
+
+config/replay_path.yaml
+    保存 replay_path_node 的业务参数，例如 input_file、path_mode、
+    velocity_scaling、acceleration_scaling、table_z 等。
+
+launch/replay_path.launch.py
+    统一加载 kinematics.yaml 和 replay_path.yaml，并启动 replay_path_node。
+```
+
+整理原则：
+
+```text
+MoveIt / IK 配置放 YAML。
+节点业务逻辑留在 C++。
+launch 负责把配置、节点和运行模式接起来。
+```
+
+过渡方案：
+
+```text
+先保留 C++ 里的兜底声明，新增 YAML + launch。
+确认 launch 路线稳定后，再决定是否删除 C++ 里的默认 kinematics 配置。
+```

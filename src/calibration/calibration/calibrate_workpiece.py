@@ -12,6 +12,8 @@ from tf2_ros import TransformException
 from tf2_ros import TransformListener
 
 
+# Transform naming convention: T_A_B means the pose of frame B in frame A.
+# R_A_B and t_A_B follow the same direction.
 def rotation_matrix_to_quaternion(rotation):
     trace = np.trace(rotation)
 
@@ -66,21 +68,21 @@ class WorkpieceCalibrator(Node):
         self.samples = []
 
     def sample_once(self):
-        transform = self.lookup_transform(
+        T_reference_point = self.lookup_transform(
             self.reference_frame,
             self.point_frame,
         )
-        if transform is None:
+        if T_reference_point is None:
             self.get_logger().warn("sample skipped because TF lookup failed")
             return False
 
         self.samples.append({
             "index": len(self.samples) + 1,
             "role": self.sample_role(len(self.samples)),
-            "point": transform,
+            "point": T_reference_point,
         })
 
-        xyz = transform["translation"]
+        xyz = T_reference_point["translation"]
         self.get_logger().info(
             "sample %d/%d (%s): %s <- %s xyz=[%.6f, %.6f, %.6f]"
             % (
@@ -107,7 +109,7 @@ class WorkpieceCalibrator(Node):
 
     def lookup_transform(self, parent_frame, child_frame):
         try:
-            transform = self.tf_buffer.lookup_transform(
+            T_parent_child_msg = self.tf_buffer.lookup_transform(
                 parent_frame,
                 child_frame,
                 Time(),
@@ -117,17 +119,17 @@ class WorkpieceCalibrator(Node):
             self.get_logger().warn(f"TF lookup failed: {error}")
             return None
 
-        t = transform.transform.translation
-        q = transform.transform.rotation
-        stamp = transform.header.stamp
+        t = T_parent_child_msg.transform.translation
+        q = T_parent_child_msg.transform.rotation
+        stamp = T_parent_child_msg.header.stamp
 
         return {
             "stamp": {
                 "sec": int(stamp.sec),
                 "nanosec": int(stamp.nanosec),
             },
-            "parent_frame": transform.header.frame_id,
-            "child_frame": transform.child_frame_id,
+            "parent_frame": T_parent_child_msg.header.frame_id,
+            "child_frame": T_parent_child_msg.child_frame_id,
             "translation": [float(t.x), float(t.y), float(t.z)],
             "rotation_xyzw": [float(q.x), float(q.y), float(q.z), float(q.w)],
         }

@@ -12,6 +12,8 @@ from tf2_ros import TransformException
 from tf2_ros import TransformListener
 
 
+# Transform naming convention: T_A_B means the pose of frame B in frame A.
+# R_A_B and t_A_B follow the same direction.
 def quaternion_to_rotation_matrix(quaternion):
     x, y, z, w = quaternion
     norm = np.linalg.norm(quaternion)
@@ -47,20 +49,20 @@ class ToolCalibrator(Node):
         self.samples = []
 
     def sample_once(self):
-        transform = self.lookup_transform(
+        T_reference_parent = self.lookup_transform(
             self.reference_frame,
             self.parent_frame,
         )
-        if transform is None:
+        if T_reference_parent is None:
             self.get_logger().warn("sample skipped because TF lookup failed")
             return False
 
         self.samples.append({
             "index": len(self.samples) + 1,
-            "transform": transform,
+            "transform": T_reference_parent,
         })
 
-        xyz = transform["translation"]
+        xyz = T_reference_parent["translation"]
         self.get_logger().info(
             "sample %d: %s <- %s xyz=[%.6f, %.6f, %.6f]"
             % (
@@ -76,7 +78,7 @@ class ToolCalibrator(Node):
 
     def lookup_transform(self, parent_frame, child_frame):
         try:
-            transform = self.tf_buffer.lookup_transform(
+            T_parent_child_msg = self.tf_buffer.lookup_transform(
                 parent_frame,
                 child_frame,
                 Time(),
@@ -86,17 +88,17 @@ class ToolCalibrator(Node):
             self.get_logger().warn(f"TF lookup failed: {error}")
             return None
 
-        t = transform.transform.translation
-        q = transform.transform.rotation
-        stamp = transform.header.stamp
+        t = T_parent_child_msg.transform.translation
+        q = T_parent_child_msg.transform.rotation
+        stamp = T_parent_child_msg.header.stamp
 
         return {
             "stamp": {
                 "sec": int(stamp.sec),
                 "nanosec": int(stamp.nanosec),
             },
-            "parent_frame": transform.header.frame_id,
-            "child_frame": transform.child_frame_id,
+            "parent_frame": T_parent_child_msg.header.frame_id,
+            "child_frame": T_parent_child_msg.child_frame_id,
             "translation": [float(t.x), float(t.y), float(t.z)],
             "rotation_xyzw": [float(q.x), float(q.y), float(q.z), float(q.w)],
         }
@@ -114,16 +116,16 @@ class ToolCalibrator(Node):
         translations = []
 
         for sample in self.samples:
-            transform = sample["transform"]
-            rotation = quaternion_to_rotation_matrix(
-                np.array(transform["rotation_xyzw"], dtype=float)
+            T_reference_parent = sample["transform"]
+            R_reference_parent = quaternion_to_rotation_matrix(
+                np.array(T_reference_parent["rotation_xyzw"], dtype=float)
             )
-            translation = np.array(transform["translation"], dtype=float)
+            t_reference_parent = np.array(T_reference_parent["translation"], dtype=float)
 
-            matrix_rows.append(np.hstack([rotation, -np.eye(3)]))
-            vector_rows.append(-translation)
-            rotations.append(rotation)
-            translations.append(translation)
+            matrix_rows.append(np.hstack([R_reference_parent, -np.eye(3)]))
+            vector_rows.append(-t_reference_parent)
+            rotations.append(R_reference_parent)
+            translations.append(t_reference_parent)
 
         matrix = np.vstack(matrix_rows)
         vector = np.hstack(vector_rows)
