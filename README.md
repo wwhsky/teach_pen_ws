@@ -2,147 +2,442 @@
 
 这个工作空间目前主要包含四部分：
 
-- `vive_tracker_ros2`：通过 OpenVR/SteamVR 读取 Vive Tracker 位姿，并发布 ROS2 topic / TF。
+- `vive_tracker_ros2`：读取 Vive Tracker 位姿和按键，并发布 ROS2 topic / TF。项目主线位姿使用 SteamVR/OpenVR；`libsurvive` 保留用于按键读取、实验和对比。
 - `calibration`：用于标定 `steamvr_base`、`tracker_frame`、`teaching_pen_tip`、`welding_torch_tip`、`workpiece_frame` 等坐标关系。
 - `teach_pen`：项目自己的业务包，包含示教路径采集、路径回放、焊缝感知和 JAKA 轨迹执行节点。
 - `jaka_ros2`：JAKA 机械臂的描述、MoveIt 配置、仿真和实机接口。
 
-## MoveIt 和执行端的关系
+## Vive Tracker 追踪
 
-MoveIt 主要负责规划，不直接决定“后面是真机械臂还是仿真机械臂”。
-
-它做的事情大致是：
+`vive_tracker_ros2` 现在有两条追踪路线：
 
 ```text
-目标位姿 / 关节目标
--> IK
--> 路径规划
--> 碰撞检查
--> 时间参数化
--> 生成 joint trajectory
--> 发送给轨迹执行接口
+位姿主线：Tracker -> USB Dongle -> SteamVR/OpenVR -> ROS2 Pose/TF
+辅助路线：Tracker -> USB Dongle -> libsurvive -> ROS2 Pose/Joy/TF
 ```
 
-在 JAKA ZU5 的 MoveIt 配置里，MoveIt 会把轨迹发到这个 action：
+实际测试下来，SteamVR/OpenVR 的位姿解算效果比 `libsurvive` 更稳定，因此
+示教和标定主流程优先使用 SteamVR/OpenVR。`libsurvive` 的价值主要在于它能
+直接从 Watchman/Dongle 数据里读到 Tracker 按键，也能用于查看基站可见性和
+做算法对比。
+
+注意：当前 `vive_tracker.launch.py` 启动的是 `libsurvive` 节点；如果要走
+主线 SteamVR/OpenVR 位姿，需要直接运行 `vive_tracker_node`，见下面
+“SteamVR / OpenVR 主线”小节。
+
+### 两种方案对比
+
+项目里保留 SteamVR/OpenVR 和 `libsurvive` 两套方案，是因为它们各自解决的
+问题不完全一样。
+
+SteamVR/OpenVR 方案依赖 SteamVR 运行时，使用前必须安装并打开 SteamVR。
+在没有头显的情况下，还需要配置 null driver，让 SteamVR 允许只用 Tracker
+和 Lighthouse 基站运行。它的缺点是系统更重、依赖闭源运行时，并且 Tracker
+按键在无头显/无控制器绑定场景下不一定容易读出来。
+
+但从目前实测看，SteamVR 的位姿解算和融合效果更好。Tracker 静止时更稳，
+移动后停下来的收敛也更自然，因此当前示教笔采点、VR 到机器人标定、轨迹复现
+这条主流程优先使用 SteamVR/OpenVR 输出的位姿。
+
+`libsurvive` 是开源项目，可以绕过 SteamVR 直接访问 Dongle 和 Lighthouse
+数据。它的优点是依赖更轻，不需要下载或运行 SteamVR/OpenVR；同时能读到更多
+底层数据，例如 Tracker 按键、基站可见性、光学观测数量等。这些数据对调试
+示教笔按键、观察遮挡、对比不同追踪算法很有价值。
+
+`libsurvive` 的问题是当前实测位姿不如 SteamVR 稳：静止时可能出现漂移，移动
+一段后再停下来可能出现过冲或回弹，推测与它的光学/IMU 融合算法、基站协同
+或滤波参数有关。后续可以继续调 `use_raw_observation`、`use_kalman`、
+`poser`、`pose_filter_alpha` 等参数，但在没有验证到更稳之前，不把它作为
+主位姿来源。
+
+因此当前取舍是：
+
+```text
+位姿：优先 SteamVR/OpenVR
+按键/原始观测/可见性调试：优先 libsurvive
+算法对比：两者都保留
+```
+
+### libsurvive 辅助路线
+
+只有在需要 `libsurvive` 按键、可见性或对比测试时，才需要构建工作空间里的
+`third_party/libsurvive/build-local`：
+
+```bash
+sudo apt install build-essential cmake libusb-1.0-0-dev libjson-c-dev libeigen3-dev
+
+cd ~/code/teach_pen_ws
+git clone https://github.com/cntools/libsurvive.git third_party/libsurvive
+touch third_party/libsurvive/COLCON_IGNORE
+cmake -S third_party/libsurvive \
+  -B third_party/libsurvive/build-local \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DUSE_OPENBLAS=OFF \
+  -DUSE_OPENCV=OFF \
+  -DBUILD_GATT_SUPPORT=OFF
+cmake --build third_party/libsurvive/build-local --parallel
+
+colcon build --packages-select vive_tracker_ros2
+source install/setup.bash
+```
+
+如果普通用户无法访问 USB 设备，需要安装 udev 规则：
+
+```bash
+sudo cp third_party/libsurvive/useful_files/81-vive.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+### Lighthouse 基站配置
+
+本项目使用两个 Lighthouse 基站时，需要让 Vive Tracker 同时处在两个基站的
+视野内。Tracker 虽然在单基站下也可能得到位姿，但遮挡、姿态约束和稳定性会
+明显变差；示教笔采点时应尽量保证 Tracker 的传感器窗口能被两个基站同时看到。
+
+对于 Lighthouse 1.0 基站，双基站模式建议设置为：
+
+```text
+一个基站：B
+另一个基站：C
+```
+
+这种 B/C 模式依赖两个基站之间能够互相看到对方，用于完成光学同步。如果两个
+基站之间存在遮挡、无法互相可见，可以使用一根 3.5mm 音频线作为同步线连接
+两个基站，此时通常将基站设置为 A/B 模式进行有线同步。
+
+本项目约定使用 Lighthouse 原始追踪空间作为 `steamvr_base`。实际安装时，
+基站的位置和朝向不需要与机器人坐标系一致，后续会通过标定得到：
+
+```text
+robot_base -> steamvr_base
+```
+
+因此基站的作用是提供稳定追踪，机器人坐标系下的真实含义由本项目标定结果决定。
+
+### 启动 libsurvive 节点
+
+第一次使用或移动基站后，可以强制重新标定 Lighthouse 相对关系：
+
+```bash
+cd ~/code/teach_pen_ws
+source install/setup.bash
+ros2 launch vive_tracker_ros2 vive_tracker.launch.py force_calibrate:=true
+```
+
+保持 Tracker 静止，并让它同时被两个基站看到。日志出现 `MPFIT success` 后，
+后续正常启动可以不再加 `force_calibrate`：
+
+```bash
+ros2 launch vive_tracker_ros2 vive_tracker.launch.py
+```
+
+默认会发布：
+
+```text
+/vive_tracker/pose
+/vive_tracker/<serial>/pose
+/vive_tracker/buttons
+/vive_tracker/<serial>/buttons
+/vive_tracker/visibility
+/tf: steamvr_base -> tracker_frame
+```
+
+`/vive_tracker/buttons` 是 `sensor_msgs/msg/Joy`：
+
+```text
+buttons[0] = trigger
+buttons[1] = grip
+buttons[2] = thumb / trackpad
+buttons[3] = menu
+
+axes[0] = trackpad x
+axes[1] = trackpad y
+axes[2] = trigger raw
+```
+
+`/vive_tracker/visibility` 用于观察基站可见性：
+
+```text
+[visible_lighthouses, total_measurements, lh0_x, lh0_y, lh1_x, lh1_y]
+```
+
+常用检查命令：
+
+```bash
+ros2 topic echo /vive_tracker/pose
+ros2 topic echo /vive_tracker/buttons
+ros2 topic echo /vive_tracker/visibility
+ros2 run tf2_ros tf2_echo steamvr_base tracker_frame
+```
+
+如果想减少 IMU 融合影响、只看光学解算结果，可以尝试：
+
+```bash
+ros2 launch vive_tracker_ros2 vive_tracker.launch.py use_raw_observation:=true
+```
+
+这种模式更接近纯 Lighthouse 光学观测，更新会更不连续；没有有效光学解时会停。
+
+### SteamVR / OpenVR 主线
+
+SteamVR/OpenVR 是当前项目推荐的 Vive Tracker 位姿来源。它的按键读取在无头显
+场景下不够可靠，但位姿解算更稳定，适合作为示教笔采点和标定的主输入。
+
+默认情况下 SteamVR 需要检测到 HMD 头显才能正常进入追踪状态。本项目只使用
+Vive Tracker 和 Lighthouse 基站，不使用头显，因此需要修改 SteamVR 配置，
+让 SteamVR 允许无头显运行。
+
+配置文件位置：
+
+```text
+~/.local/share/Steam/config/steamvr.vrsettings
+```
+
+在该文件中加入或修改 `steamvr` 配置段：
+
+```json
+{
+  "steamvr": {
+    "requireHmd": false,
+    "forcedDriver": "null",
+    "activateMultipleDrivers": true,
+    "enableHomeApp": false,
+    "showMirrorView": false
+  }
+}
+```
+
+如果文件中已经有其他配置项，不要直接覆盖整个文件，而是把上面的键合并到
+已有的 `"steamvr"` 对象中，保证最终文件仍然是合法 JSON。
+
+常用字段含义：
+
+```text
+requireHmd: false
+    不强制要求头显。
+
+forcedDriver: "null"
+    使用 SteamVR 的 null HMD 驱动模拟头显。
+
+activateMultipleDrivers: true
+    允许 null driver 和 Lighthouse / Tracker 相关驱动同时工作。
+
+enableHomeApp: false
+    不启动 SteamVR Home，减少额外负载。
+
+showMirrorView: false
+    不显示 VR 镜像窗口，避免无头显场景下弹出无用画面。
+```
+
+配置完成后重启 SteamVR。随后将 Vive Tracker 的无线接收器插入电脑，
+长按 Tracker 的配对键进入配对状态。配对成功后，SteamVR 小窗口中应能看到
+Tracker 图标；基站可见且追踪正常时，OpenVR 节点才能读到有效位姿。
+
+### tracking universe
+
+OpenVR 读取位姿时需要指定 tracking universe，也就是 SteamVR 输出位姿所使用
+的坐标空间。本项目节点支持通过 `tracking_universe` 参数选择。
+
+常见模式：
+
+```text
+raw
+    原始追踪空间。未经过 SteamVR Room Setup 的坐标变换，也不依赖房间原点、
+    地面高度或站立中心。本项目使用该模式，然后用自己的标定流程将
+    steamvr_base 对齐到 robot_base。
+
+standing / sitstand
+    经过 SteamVR Room Setup 后的用户空间。通常包含地面、站立中心、房间方向
+    等人为标定结果，适合 VR 应用，但对本项目来说会引入额外的 SteamVR 房间
+    标定依赖。
+
+seated
+    以坐姿/重置后的 seated zero pose 为参考的空间，主要用于坐姿 VR 场景。
+```
+
+本项目推荐使用：
+
+```text
+tracking_universe:=raw
+```
+
+也就是使用未经过 SteamVR 房间标定的原始数据。这样 SteamVR 只负责 Lighthouse
+追踪，机器人坐标系关系由本项目自己的标定模块维护。
+
+OpenVR 节点直接运行示例：
+
+```bash
+cd ~/code/teach_pen_ws
+source install/setup.bash
+ros2 run vive_tracker_ros2 vive_tracker_node --ros-args \
+  -p tracking_universe:=raw
+```
+
+如果日志中出现：
+
+```text
+pose_valid=false
+tracking_result=Calibrating_OutOfRange
+```
+
+通常表示 Tracker 已连接，但当前没有被基站稳定追踪。需要检查基站供电、
+基站模式、Tracker 是否在基站视野内，以及 SteamVR 中设备图标是否正常。
+
+## 标定模块
+
+当前标定包是 `calibration`，主要维护这些 TF：
+
+```text
+robot_base
+├── robot_flange
+│   └── welding_torch_tip
+├── steamvr_base
+│   └── tracker_frame
+│       └── teaching_pen_tip
+└── workpiece_frame
+```
+
+运行时发布静态标定 TF：
+
+```bash
+cd ~/code/teach_pen_ws
+source install/setup.bash
+ros2 run calibration publish_calibration_tf --ros-args \
+  -p files:="[config/calibration/teaching_pen_tip.yaml,config/calibration/welding_torch_tip.yaml,config/calibration/vr_to_robot.yaml,config/calibration/workpiece.yaml]"
+```
+
+`publish_calibration_tf` 支持两种 YAML 格式：字段直接在顶层，或者在
+`calibration_result` 下。当前默认发布用文件是：
+
+```text
+config/calibration/teaching_pen_tip.yaml
+config/calibration/welding_torch_tip.yaml
+config/calibration/vr_to_robot.yaml
+config/calibration/workpiece.yaml
+```
+
+### 联合标定
+
+当前主线推荐使用联合标定：
+
+```bash
+ros2 run calibration calibrate_tool_vr_joint --ros-args \
+  -p output_file:=config/calibration/tool_vr_joint_calibration.yaml
+```
+
+它同时估计：
+
+```text
+robot_flange -> welding_torch_tip
+robot_base   -> steamvr_base
+```
+
+这个脚本的输出 `tool_vr_joint_calibration.yaml` 是完整记录文件，里面包含原始
+样本和两个嵌套结果。它不是 `publish_calibration_tf` 默认直接读取的文件。
+标定完成后，需要把其中结果拆到发布用 YAML：
+
+```text
+tool_transform       -> config/calibration/welding_torch_tip.yaml
+vr_to_robot_transform -> config/calibration/vr_to_robot.yaml
+```
+
+如果已经有稳定结果，后续日常运行只需要加载发布用 YAML；只有更换 Tracker
+安装、移动基站、调整工具或重新定义机器人基座时才需要重新标定。
+
+### 其他标定工具
+
+```text
+calibrate_tool
+    传统 pivot 工具标定。默认求 robot_flange -> welding_torch_tip。
+
+calibrate_vr_to_robot
+    旧的 VR 到机器人标定流程。适合两个 tip 已知时，用成对点求
+    robot_base -> steamvr_base。
+
+calibrate_workpiece
+    工件三点法标定。采集原点、+X 点、XY 平面点，输出
+    robot_base -> workpiece_frame。
+```
+
+## teach_pen 与 MoveIt 流程
+
+这一部分是项目从“示教笔采点”到“机械臂复现轨迹”的主流程。核心思想是：
+
+```text
+示教笔采集 teaching_pen_tip 路径
+-> 标定得到 robot_flange -> welding_torch_tip
+-> replay_path_node 将 tip 路径换算成 Link6 / robot_flange 目标
+-> MoveIt 做 IK、碰撞检查、路径规划和时间参数化
+-> MoveIt 将 joint trajectory 发给当前执行端
+-> 执行端决定 RViz fake、Gazebo 还是真机运动
+```
+
+MoveIt 本身主要负责规划，不直接决定“后面是真机械臂还是仿真机械臂”。在
+JAKA ZU5 配置里，MoveIt 最终会把轨迹发到：
 
 ```text
 /jaka_zu5_controller/follow_joint_trajectory
 ```
 
-这个 action 不是普通 topic，而是 ROS2 action，类型是：
+这个接口是 `control_msgs/action/FollowJointTrajectory`。谁提供这个 action
+server，谁就是当前执行端。
 
-```text
-control_msgs/action/FollowJointTrajectory
+### 运行模式
+
+| 模式 | 启动方式 | 执行端 | 用途 |
+|---|---|---|---|
+| RViz fake | `ros2 launch jaka_zu5_moveit_config demo.launch.py use_rviz_sim:=true` | fake ros2_control | 快速检查 MoveIt 规划和 RViz 显示 |
+| Gazebo | `ros2 launch teach_pen gazebo.launch.py model:=zu5` | Gazebo ros2_control | 检查物理仿真、工件和环境关系 |
+| 实机主线 | `ros2 launch teach_pen real_robot.launch.py ip:=<机械臂IP> model:=zu5` | `jaka_trajectory_executor_node` | 项目自己的 JAKA SDK 执行链路 |
+| JAKA demo | `ros2 launch jaka_planner moveit_server.launch.py ip:=<机械臂IP> model:=zu5` | 官方 `moveit_server` | 对照官方 demo，不作为主线 |
+
+项目自己的 Gazebo 入口是：
+
+```bash
+cd ~/code/teach_pen_ws
+source install/setup.bash
+ros2 launch teach_pen gazebo.launch.py model:=zu5
 ```
 
-所以真正决定仿真还是真机的是：**当前是谁提供了 `/jaka_zu5_controller/follow_joint_trajectory` 这个 action server**。
+它会启动 `publish_calibration_tf`、JAKA MoveIt 配置里的 Gazebo 子 launch 和
+RViz。Gazebo 子 launch 内部负责启动 Ignition Gazebo、`robot_state_publisher`、
+`move_group`、生成机器人模型，并启动 `jaka_zu5_controller` 和
+`joint_state_broadcaster`。不要再额外启动一份 `move_group.launch.py`，否则会出现
+两个同名 `/move_group`，执行轨迹时容易互相干扰。
 
-## Controller 配置是什么意思
-
-JAKA ZU5 的 MoveIt 控制器配置在：
+`moveit_controllers.yaml` 中配置的是 MoveIt 要找哪个 action：
 
 ```text
 src/jaka_ros2/src/jaka_zu5_moveit_config/config/moveit_controllers.yaml
 ```
 
-核心内容类似：
+当前 `moveit_manage_controllers=false`，所以 MoveIt 不负责帮你启动 controller。
+运行前必须已经有一个执行端提供 `/jaka_zu5_controller/follow_joint_trajectory`。
+实机模式下不要同时启动 `use_rviz_sim:=true`，否则 fake controller 可能和真机
+executor 抢 `/joint_states` 或 trajectory action。
 
-```yaml
-jaka_zu5_controller:
-  type: FollowJointTrajectory
-  action_ns: follow_joint_trajectory
-  joints:
-    - joint_1
-    - joint_2
-    - joint_3
-    - joint_4
-    - joint_5
-    - joint_6
-```
+### teach_pen 节点分工
 
-它告诉 MoveIt：
+| 节点 | 输入 | 输出 | 作用 |
+|---|---|---|---|
+| `collect_path_node` | TF: `robot_base <- teaching_pen_tip` | `config/paths/*.yaml` | 用示教笔采集 tip 路径 |
+| `replay_path_node` | 路径 YAML、`welding_torch_tip.yaml`、MoveIt | MoveIt 规划/执行请求 | 将 tip 路径转换为法兰目标并复现 |
+| `jaka_trajectory_executor_node` | `FollowJointTrajectory` action | JAKA SDK `servo_j`、`/joint_states` | 项目自己的实机执行端 |
+| `seam_perception_node` | ROI 点云或点云文件 | `/seam_tracking/measured_path` | 从点云中提取焊缝线 |
 
-```text
-控制器名字：jaka_zu5_controller
-接口类型：FollowJointTrajectory action
-action 名字：follow_joint_trajectory
-控制关节：joint_1 ~ joint_6
-```
+### 路径采集
 
-因此 MoveIt 最后会发送到：
-
-```text
-/jaka_zu5_controller/follow_joint_trajectory
-```
-
-## RViz Fake 仿真
-
-启动：
+采集节点查询 TF 中 `base_frame <- tip_frame` 的位姿并保存成 YAML。默认采的是
+示教笔笔尖：
 
 ```bash
 cd ~/code/teach_pen_ws
 source install/setup.bash
-ros2 launch jaka_zu5_moveit_config demo.launch.py use_rviz_sim:=true
-```
-
-链路：
-
-```text
-MoveIt
--> /jaka_zu5_controller/follow_joint_trajectory
--> fake ros2_control
--> /joint_states
--> robot_state_publisher
--> /tf
--> RViz 里面机械臂运动
-```
-
-这个模式没有 Gazebo 物理世界，也没有实机，只是用 fake hardware 模拟关节执行。
-
-## Gazebo 仿真
-
-启动：
-
-```bash
-cd ~/code/teach_pen_ws
-source install/setup.bash
-ros2 launch jaka_zu5_moveit_config demo_gazebo.launch.py
-```
-
-链路：
-
-```text
-MoveIt
--> /jaka_zu5_controller/follow_joint_trajectory
--> Gazebo ros2_control
--> Gazebo 里的机器人运动
--> /joint_states
--> RViz 同步显示
-```
-
-Gazebo 适合测试机器人和工件、环境之间的空间关系，也方便后续加入工件模型。
-
-## teach_pen 节点
-
-当前 `teach_pen` 包里主要有这些节点：
-
-```text
-collect_path_node
-seam_perception_node
-replay_path_node
-jaka_trajectory_executor_node
-```
-
-### collect_path_node
-
-用于从示教笔采样路径。它从键盘读取控制命令，查询 TF 中的笔尖位姿，并保存为 YAML。
-
-运行示例：
-
-```bash
-cd ~/code/teach_pen_ws
-source install/setup.bash
-ros2 run teach_pen collect_path_node
+ros2 run teach_pen collect_path_node --ros-args \
+  -p base_frame:=robot_base \
+  -p tip_frame:=teaching_pen_tip \
+  -p output_file:=config/paths/demo_path.yaml
 ```
 
 键盘控制：
@@ -155,17 +450,11 @@ s      保存 YAML
 q      退出节点
 ```
 
-默认输出路径：
-
-```text
-config/paths/demo_path.yaml
-```
-
 路径 YAML 的基本格式：
 
 ```yaml
 base_frame: robot_base
-tip_frame: welding_torch_tip
+tip_frame: teaching_pen_tip
 sample_count: 3
 
 samples:
@@ -175,23 +464,19 @@ samples:
     rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
 ```
 
-其中 `translation` 单位为米，`rotation_xyzw` 为四元数，顺序是
-`x, y, z, w`。
+`translation` 单位为米，`rotation_xyzw` 为四元数，顺序是 `x, y, z, w`。
+注意：这里保存的是 tip 位姿，不是 MoveIt 直接执行的 `Link6` 位姿。
 
-### replay_path_node
+### 路径回放
 
-用于读取路径 YAML，并通过 MoveIt 回放路径。
-
-当前流程：
+`replay_path_node` 读取路径 YAML 后，会加载工具标定：
 
 ```text
-读取 samples
--> 检查采样点是否为空
--> 先规划并移动到第一个采样点
--> computeCartesianPath 生成笛卡尔路径
--> IterativeParabolicTimeParameterization 补时间/速度/加速度
--> execute 发送给 MoveIt 当前 controller
+robot_flange -> welding_torch_tip
 ```
+
+然后把每个 `base -> tip` 样本换算成 `base -> Link6/flange` 目标。这样 MoveIt
+规划的是机械臂真实末端 link，焊枪尖会尽量复现示教笔尖采集到的路径。
 
 运行示例：
 
@@ -200,224 +485,174 @@ cd ~/code/teach_pen_ws
 source install/setup.bash
 ros2 run teach_pen replay_path_node --ros-args \
   -p model:=zu5 \
-  -p input_file:=config/paths/demo_path.yaml
+  -p input_file:=config/paths/demo_path.yaml \
+  -p tool_calibration_file:=config/calibration/welding_torch_tip.yaml \
+  -p execute:=true \
+  -p path_mode:=cartesian
 ```
 
-注意：`demo_path.yaml` 中的点会被 MoveIt 当作当前 planning frame 下的
-TCP 位姿。如果坐标系或姿态不合理，可能出现不可达、IK 失败或碰撞失败。
+`use_sim_time` 默认为 `false`，实机运行时不需要设置。若在 Gazebo 中单独运行
+`replay_path_node`，需要让它使用仿真时间，否则会因为 `/joint_states` 的时间戳
+来自 `/clock` 而无法获取当前状态：
 
-### seam_perception_node
+```bash
+ros2 run teach_pen replay_path_node --ros-args \
+  -p use_sim_time:=true
+```
 
-用于处理 ROI 点云并提取焊缝线。当前实现思路是：
+当前回放流程：
 
 ```text
-输入 ROI 点云
--> 分割两个平面
--> 计算两平面交线
--> 根据交线附近真实点云支持范围裁剪起点和终点
--> 输出 measured_path
+初始化 MoveGroupInterface
+-> 读取 samples
+-> 读取 tool_calibration_file
+-> 添加 table collision
+-> 规划并执行 home start
+-> 用 seeded IK 移动到第一个采样点
+-> cartesian 模式：computeCartesianPath + 时间参数化
+   joint 模式：逐点 IK + 普通关节规划
+-> 发布 /display_planned_path 供 RViz 预览
+-> execute 发送给当前 FollowJointTrajectory action server
+-> 成功后 home end，失败后尝试 home after failure
 ```
 
-当前主要用于验证角焊缝/交线类焊缝的点云提取流程。
+常用参数：
 
-### jaka_trajectory_executor_node
+```text
+model                    default: zu5
+pose_reference_frame     default: robot_base
+end_effector_link        default: Link6
+tool_calibration_file    default: config/calibration/welding_torch_tip.yaml
+path_mode                cartesian / joint
+cartesian_eef_step       default: 0.001
+cartesian_min_fraction   default: 1.0
+velocity_scaling         default: 0.05
+acceleration_scaling     default: 0.05
+execute                  default: true，false 时只规划和预览
+use_sim_time             default: false，Gazebo 单独回放时设为 true
+enable_table_collision   default: true
+table_z                  default: -0.015
+```
 
-这是项目新增的 JAKA 实机轨迹执行节点，用来替代或对照官方
-`jaka_planner/moveit_server.cpp`。
+`velocity_scaling` 和 `acceleration_scaling` 会传给 MoveIt 的轨迹时间参数化，
+含义是按关节速度/加速度限制的比例执行。比如：
 
-它的职责：
+```bash
+ros2 run teach_pen replay_path_node --ros-args \
+  -p velocity_scaling:=0.10 \
+  -p acceleration_scaling:=0.10
+```
+
+如果规划失败，节点会打印 IK 失败位置、关节越界、碰撞对等诊断信息。常见原因是
+路径超出工作空间、工具标定不准、焊枪姿态不可达，或者工具/桌面碰撞。
+
+### 实机执行端
+
+项目自己的实机链路由 `jaka_trajectory_executor_node` 提供。它做三件事：
 
 ```text
 连接 JAKA SDK
 发布 /joint_states
 提供 /jaka_zu5_controller/follow_joint_trajectory
-接收 MoveIt 发来的 JointTrajectory
-逐点调用 JAKA SDK servo_j 执行
 ```
 
-运行示例：
+推荐用一条 launch 启动实机环境：
 
 ```bash
 cd ~/code/teach_pen_ws
 source install/setup.bash
+ros2 launch teach_pen real_robot.launch.py ip:=<机械臂IP> model:=zu5
+```
+
+这个 launch 默认会同时启动：
+
+```text
+jaka_trajectory_executor_node
+publish_calibration_tf
+static_virtual_joint_tfs
+robot_state_publisher
+move_group
+RViz
+```
+
+常用参数：
+
+```text
+start_executor        default: true
+start_calibration_tf  default: true
+start_static_tf       default: true
+start_rsp             default: true
+start_move_group      default: true
+start_rviz            default: true
+auto_power_on         default: true
+auto_enable           default: true
+```
+
+如果只想单独启动执行端：
+
+```bash
 ros2 run teach_pen jaka_trajectory_executor_node --ros-args \
   -p ip:=<机械臂IP> \
-  -p model:=zu5
+  -p model:=zu5 \
+  -p auto_power_on:=true \
+  -p auto_enable:=true
 ```
 
-启动后可以检查：
-
-```bash
-ros2 action list | grep trajectory
-ros2 topic echo /joint_states --once
-```
-
-应该能看到：
+执行端会把 MoveIt 发来的轨迹按 `servo_period` 重采样，再按
+`servo_send_period` 调用 JAKA SDK `servo_j`。常用参数：
 
 ```text
-/jaka_zu5_controller/follow_joint_trajectory
+servo_period           default: 0.008
+servo_send_period      default: 0.004
+servo_step_num         default: 1
+servo_queue_control    default: true
+servo_queue_low        default: 3
+servo_queue_high       default: 10
+reach_tolerance_deg    default: 0.2
 ```
 
-这个节点当前是第一版执行器，已经具备基本轨迹接收和 SDK 执行能力。后续
-还需要继续加强取消、急停、错误码处理、轨迹时间检查和限速保护。
-
-## 实机执行
-
-实机执行有两条路线。
-
-### 路线 A：使用项目自己的 executor
-
-推荐后续项目主线使用这个方式：
+检查当前接的是谁：
 
 ```bash
-cd ~/code/teach_pen_ws
-source install/setup.bash
-ros2 run teach_pen jaka_trajectory_executor_node --ros-args \
-  -p ip:=<机械臂IP> \
-  -p model:=zu5
-```
-
-再启动 MoveIt / RViz：
-
-```bash
-cd ~/code/teach_pen_ws
-source install/setup.bash
-ros2 launch jaka_zu5_moveit_config demo.launch.py
-```
-
-链路：
-
-```text
-RViz / replay_path_node
--> MoveIt move_group
--> /jaka_zu5_controller/follow_joint_trajectory
--> teach_pen/jaka_trajectory_executor_node
--> JAKA SDK servo_j()
--> 真实机械臂
-```
-
-实机模式下不要同时启动：
-
-```bash
-ros2 launch jaka_zu5_moveit_config demo.launch.py use_rviz_sim:=true
-```
-
-因为 `use_rviz_sim:=true` 会启动 fake ros2_control，可能和实机 executor
-抢 `/joint_states` 和 trajectory action。
-
-### 路线 B：使用 JAKA 官方 moveit_server
-
-官方实机链路由 `jaka_planner` 里的 `moveit_server` 接 MoveIt 轨迹，再通过
-JAKA SDK 发给机械臂。
-
-启动实机 server：
-
-```bash
-cd ~/code/teach_pen_ws
-source install/setup.bash
-ros2 launch jaka_planner moveit_server.launch.py ip:=<机械臂IP> model:=zu5
-```
-
-再启动 MoveIt / RViz：
-
-```bash
-cd ~/code/teach_pen_ws
-source install/setup.bash
-ros2 launch jaka_zu5_moveit_config demo.launch.py
-```
-
-`moveit_server.cpp` 中 action server 创建位置：
-
-```cpp
-"/jaka_" + robot_model + "_controller/follow_joint_trajectory"
-```
-
-如果传入：
-
-```bash
-model:=zu5
-```
-
-它就会提供：
-
-```text
-/jaka_zu5_controller/follow_joint_trajectory
-```
-
-这正好和 MoveIt 的控制器配置对上。
-
-官方 `moveit_server.cpp` 更像 demo：取消、停止、错误处理和轨迹时间控制都
-比较粗糙。可以作为参考，但最终项目建议逐步切到
-`jaka_trajectory_executor_node`。
-
-## 如何确认当前接的是谁
-
-查看 action：
-
-```bash
-ros2 action list
-```
-
-应该能看到：
-
-```text
-/jaka_zu5_controller/follow_joint_trajectory
-```
-
-查看节点：
-
-```bash
+ros2 action list | grep follow_joint_trajectory
 ros2 node list
+ros2 topic echo /joint_states --once
 ```
 
 大致判断：
 
-- 看到 `jaka_trajectory_executor_node`：大概率是项目自己的 JAKA 实机链路。
-- 看到 `moveit_server`：大概率是 JAKA 官方实机链路。
-- 看到 `controller_manager` / `joint_trajectory_controller`：大概率是 fake ros2_control 或 Gazebo 链路。
+```text
+jaka_trajectory_executor_node    项目自己的实机执行端
+moveit_server                    JAKA 官方 demo 执行端
+controller_manager               fake ros2_control 或 Gazebo 执行端
+```
 
-## moveit_test 为什么能让 RViz 动
+### 焊缝感知
 
-`jaka_planner` 里的：
+`seam_perception_node` 用于处理 ROI 点云并提取焊缝线。当前实现是两平面 RANSAC
+拟合角焊缝交线，并根据交线附近真实点云支持范围裁剪起点和终点。
+
+topic 输入示例：
 
 ```bash
-ros2 run jaka_planner moveit_test --ros-args -p model:=zu5
+ros2 run teach_pen seam_perception_node --ros-args \
+  -p input_cloud_topic:=/seam_camera/roi_points
 ```
 
-本质上是一个 MoveIt 客户端。它给 MoveIt 设置目标，然后调用 plan / execute。
+文件测试示例：
 
-如果当前有 fake ros2_control，RViz 里的模型会动。
-
-如果当前有 Gazebo controller，Gazebo 里的模型会动。
-
-如果当前有 `moveit_server` 或 `jaka_trajectory_executor_node` 连着真机，真实机械臂会动。
-
-所以它不是直接控制 RViz，而是通过 MoveIt 走同一套轨迹执行接口。
-
-## 关于 moveit_server.cpp 里的 step_num
-
-`moveit_server.cpp` 收到 MoveIt 轨迹后，会逐点调用 JAKA SDK：
-
-```cpp
-robot.servo_j(&joint_pose, MoveMode::ABS, step_num);
+```bash
+ros2 run teach_pen seam_perception_node --ros-args \
+  -p input_file:=/path/to/cloud.ply \
+  -p input_file_frame:=seam_camera_frame
 ```
 
-其中：
+输出：
 
-```cpp
-int step_num = static_cast<int>(dt / 0.008f);
-step_num = max(step_num, 1);
+```text
+/seam_tracking/measured_path
+/seam_tracking/debug_cloud
 ```
-
-这里的 `dt` 是相邻两个轨迹点的时间差，`0.008s` 对应 8ms servo 周期。
-
-注意这个实现比较 demo 化：
-
-- `static_cast<int>` 会向下取整，例如 `9ms / 8ms = 1.125` 会变成 `1`。
-- 循环里没有按 `dt` 主动 sleep，而是快速把点交给 SDK。
-- 轨迹真实执行效果依赖 JAKA SDK / 控制器内部如何处理 `servo_j`。
-
-所以上实机前需要谨慎测试速度、加速度、停止逻辑和误差。
 
 ## ZU5 末端工具模型
 
@@ -574,7 +809,7 @@ ros2 launch jaka_zu5_moveit_config demo.launch.py use_rviz_sim:=true
 下一步：
 
 - 从 CAD 确认组合 STL 相对于 `robot_flange` 的准确安装变换。
-- 完成焊枪 TCP 标定，得到工具坐标系相对 `robot_flange` 的位姿。
+- 复核或按现场重新执行焊枪 TCP / VR 联合标定，更新 `welding_torch_tip.yaml` 和 `vr_to_robot.yaml`。
 - 完成相机手眼标定，发布相机坐标系 TF。
 - 用多组机械臂姿态验证工具不会与本体发生错误碰撞。
 - 将焊缝路径转换为焊枪 TCP 路径，并在 MoveIt 中进行笛卡尔规划。

@@ -64,6 +64,11 @@ public:
         m_cartesian_eef_step = declare_parameter<double>("cartesian_eef_step", 0.001);
         m_cartesian_min_fraction = declare_parameter<double>("cartesian_min_fraction", 1.0);
         m_path_mode = declare_parameter<std::string>("path_mode", "cartesian");
+        m_velocity_scaling = declare_parameter<double>("velocity_scaling", 0.05);
+        m_acceleration_scaling = declare_parameter<double>("acceleration_scaling", 0.05);
+        if (!has_parameter("use_sim_time")) {
+            declare_parameter<bool>("use_sim_time", false);
+        }
         m_enable_table_collision = declare_parameter<bool>("enable_table_collision", true);
         m_table_frame = declare_parameter<std::string>("table_frame", "robot_base");
         m_table_z = declare_parameter<double>("table_z", -0.015);
@@ -75,6 +80,15 @@ public:
         m_state_validity_client = create_client<moveit_msgs::srv::GetStateValidity>(
             "/check_state_validity");
         declareKinematicsParameters();
+
+        bool use_sim_time = false;
+        get_parameter("use_sim_time", use_sim_time);
+        RCLCPP_INFO(
+            get_logger(),
+            "use_sim_time=%s velocity_scaling=%.3f acceleration_scaling=%.3f",
+            use_sim_time ? "true" : "false",
+            m_velocity_scaling,
+            m_acceleration_scaling);
     }
 
     bool initializeMoveIt()
@@ -112,6 +126,8 @@ public:
         m_move_group->setNumPlanningAttempts(m_num_planning_attempts);
         m_move_group->setGoalPositionTolerance(m_goal_position_tolerance);
         m_move_group->setGoalOrientationTolerance(m_goal_orientation_tolerance);
+        m_move_group->setMaxVelocityScalingFactor(m_velocity_scaling);
+        m_move_group->setMaxAccelerationScalingFactor(m_acceleration_scaling);
 
         applyTableCollisionObject();
         return true;
@@ -305,6 +321,15 @@ public:
 
     void publishDisplayTrajectory(const moveit_msgs::msg::RobotTrajectory & trajectory)
     {
+        if (!trajectory.joint_trajectory.points.empty()) {
+            const auto & duration = trajectory.joint_trajectory.points.back().time_from_start;
+            RCLCPP_INFO(
+                this->get_logger(),
+                "trajectory duration: %.3f sec, points=%zu",
+                rclcpp::Duration(duration).seconds(),
+                trajectory.joint_trajectory.points.size());
+        }
+
         moveit_msgs::msg::DisplayTrajectory display;
         const auto current_state = m_move_group->getCurrentState(2.0);
         if (current_state) {
@@ -753,8 +778,8 @@ public:
         trajectory_processing::IterativeParabolicTimeParameterization time_parameterization;
         const bool time_success = time_parameterization.computeTimeStamps(
             robot_trajectory,
-            0.05,
-            0.05);
+            m_velocity_scaling,
+            m_acceleration_scaling);
         if (!time_success) {
             RCLCPP_ERROR(this->get_logger(), "轨迹时间参数化失败");
             return false;
@@ -879,6 +904,8 @@ private:
     double m_cartesian_eef_step;
     double m_cartesian_min_fraction;
     std::string m_path_mode;
+    double m_velocity_scaling;
+    double m_acceleration_scaling;
     bool m_enable_table_collision;
     std::string m_table_frame;
     double m_table_z;
@@ -916,9 +943,6 @@ void handleReplaySigint(int)
 int main(int argc, char ** argv)
 {
     rclcpp::init(argc, argv);
-    // rclcpp::NodeOptions options;
-    // options.parameter_overrides({rclcpp::Parameter("use_sim_time", true)});
-    // auto node = std::make_shared<ReplayPathNode>(options);
     auto node = std::make_shared<ReplayPathNode>();
     {
         std::lock_guard<std::mutex> lock(g_replay_node_mutex);
