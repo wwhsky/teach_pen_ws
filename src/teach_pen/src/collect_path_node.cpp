@@ -38,8 +38,8 @@ public:
     m_base_frame = declare_parameter<std::string>("base_frame", "robot_base");
     m_tip_frame = declare_parameter<std::string>("tip_frame", "teaching_pen_tip");
     m_output_file = declare_parameter<std::string>("output_file", "config/paths/demo_path.yaml");
-    m_lookup_timeout_sec = declare_parameter<double>("lookup_timeout_sec", 0.2);
-    m_min_record_interval_sec = declare_parameter<double>("min_record_interval_sec", 0.05);
+    m_lookup_timeout_sec = declare_parameter<double>("lookup_timeout_sec", 0.2); // TF查找超时时间
+    m_min_record_interval_sec = declare_parameter<double>("min_record_interval_sec", 0.05); // 记录模式下的采样周期
 
     startKeyboardReader();
     m_record_timer = create_wall_timer(

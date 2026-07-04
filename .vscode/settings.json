@@ -11,5 +11,9 @@
   "files.exclude": {
     "**/__pycache__": true
   },
-  "cmake.sourceDirectory": "/home/wwh/code/teach_pen_ws/src/teach_pen"
+  "cmake.sourceDirectory": "/home/wwh/code/teach_pen_ws/src/teach_pen",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/src/calibration",
+    "${workspaceFolder}/install/calibration/lib/python3.10/site-packages"
+  ]
 }

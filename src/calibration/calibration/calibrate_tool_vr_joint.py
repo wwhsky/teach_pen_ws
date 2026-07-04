@@ -28,15 +28,19 @@ def quaternion_to_rotation_matrix(quaternion):
     return Rotation.from_quat(q / norm).as_matrix()
 
 
-
+# 刚体变换SVD
 def rigid_transform_svd(points_in_source, points_in_target):
+    # 分别计算两个坐标系点云的质心以及偏移向量
     source_centroid = points_in_source.mean(axis=0)
     target_centroid = points_in_target.mean(axis=0)
     source_centered = points_in_source - source_centroid
     target_centered = points_in_target - target_centroid
 
+    # 计算协方差矩阵并做奇异值分解
     covariance = source_centered.T @ target_centered
     u, singular_values, vt = np.linalg.svd(covariance)
+
+    # 根据奇异值分解结果计算旋转矩阵，平移根据旋转后的原坐标系质心和目标坐标系质心计算
     R_target_source = vt.T @ u.T
     if np.linalg.det(R_target_source) < 0.0:
         vt[-1, :] *= -1.0
@@ -50,6 +54,7 @@ class ToolVrJointCalibrator(Node):
     def __init__(self):
         super().__init__("calibrate_tool_vr_joint")
 
+        # 声明并且给定默认值
         self.declare_parameter("robot_parent_frame", "robot_base")
         self.declare_parameter("robot_flange_frame", "robot_flange")
         self.declare_parameter("robot_tip_frame", "welding_torch_tip")
@@ -59,6 +64,7 @@ class ToolVrJointCalibrator(Node):
         self.declare_parameter("output_file", "tool_vr_joint_calibration.yaml")
         self.declare_parameter("min_samples", 6)
 
+        # 获取实际值
         self.robot_parent_frame = self.get_parameter("robot_parent_frame").value
         self.robot_flange_frame = self.get_parameter("robot_flange_frame").value
         self.robot_tip_frame = self.get_parameter("robot_tip_frame").value
@@ -100,6 +106,7 @@ class ToolVrJointCalibrator(Node):
         }
 
     def sample_once(self):
+        # 从 TF 中获取机械臂法兰在机械臂基坐标系下，以及 tracker 尖端在 SteamVR 基坐标系下的变换
         T_robot_parent_flange = self.lookup_transform(
             self.robot_parent_frame,
             self.robot_flange_frame,
@@ -153,6 +160,7 @@ class ToolVrJointCalibrator(Node):
         return True
 
     def compute_initial_guess(self, flange_rotations, flange_translations, tracker_points):
+        # 将工具标定的平移量置零并根据该平移量计算工具坐标系在机器人坐标系下的位置
         tool_offset = np.zeros(3, dtype=float)
         robot_tip_points = np.array([
             rotation @ tool_offset + translation
@@ -162,6 +170,8 @@ class ToolVrJointCalibrator(Node):
             tracker_points,
             robot_tip_points,
         )
+
+        # 横向拼接：工具标定平移，vr标定旋转向量（绕xyz三轴的选旋转分量），vr标定平移
         return np.hstack([
             tool_offset,
             Rotation.from_matrix(R_robot_vr).as_rotvec(),
@@ -175,22 +185,25 @@ class ToolVrJointCalibrator(Node):
             )
             return None
 
-        flange_rotations = []
-        flange_translations = []
-        tracker_points = []
+        # 从YAML文件中获取标定数据
+        flange_rotations = [] # 机械臂法兰盘变换旋转部分
+        flange_translations = [] # 机械臂法兰盘变换平移部分
+        tracker_points = [] # tracker tip在vr系中的坐标
         for sample in self.samples:
             robot_flange = sample["robot_flange"]
             flange_rotations.append(quaternion_to_rotation_matrix(robot_flange["rotation_xyzw"]))
             flange_translations.append(np.array(robot_flange["translation"], dtype=float))
-            tracker_points.append(np.array(sample["tracker_tip"]["translation"], dtype=float))
+            tracker_points.append(np.array(sample["tracker_tip"]["translation"], dtype=float))    
+        tracker_points = np.array(tracker_points, dtype=float) # 为了矩阵运算将tracker points单独转为数组
 
-        tracker_points = np.array(tracker_points, dtype=float)
+        # 按照空的工具标定结果计算第一次估计
         initial = self.compute_initial_guess(
             flange_rotations,
             flange_translations,
             tracker_points,
         )
 
+        # 使用标定结果计算tracker tip与robot tip的偏差作为residual
         def residual(parameters):
             tool_offset = parameters[0:3]
             R_robot_vr = Rotation.from_rotvec(parameters[3:6]).as_matrix()
@@ -207,6 +220,7 @@ class ToolVrJointCalibrator(Node):
                 rows.append(robot_tip - p_robot_tip_from_vr)
             return np.hstack(rows)
 
+        # 使用最小二乘法优化标定结果
         result = least_squares(
             residual,
             initial,
@@ -215,10 +229,12 @@ class ToolVrJointCalibrator(Node):
             max_nfev=2000,
         )
 
+        # 重新封装标定结果
         tool_offset = result.x[0:3]
         R_robot_vr = Rotation.from_rotvec(result.x[3:6]).as_matrix()
         t_robot_vr = result.x[6:9]
 
+        # 根据标定结果计算robot tip以及tracker tip的偏差作为误差
         robot_tip_points = np.array([
             rotation @ tool_offset + translation
             for rotation, translation in zip(flange_rotations, flange_translations)
@@ -226,6 +242,7 @@ class ToolVrJointCalibrator(Node):
         p_robot_tip_from_vr = (R_robot_vr @ tracker_points.T).T + t_robot_vr
         errors = np.linalg.norm(robot_tip_points - p_robot_tip_from_vr, axis=1)
 
+        # 打印标定结果
         self.get_logger().info(
             "computed joint calibration from %d samples, tool offset=[%.6f, %.6f, %.6f] m, "
             "mean error %.6f m, max error %.6f m"

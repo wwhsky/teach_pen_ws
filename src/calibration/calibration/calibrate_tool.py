@@ -14,6 +14,7 @@ from tf2_ros import TransformListener
 
 # Transform naming convention: T_A_B means the pose of frame B in frame A.
 # R_A_B and t_A_B follow the same direction.
+# 四元数转旋转矩阵
 def quaternion_to_rotation_matrix(quaternion):
     x, y, z, w = quaternion
     norm = np.linalg.norm(quaternion)
@@ -49,6 +50,7 @@ class ToolCalibrator(Node):
         self.samples = []
 
     def sample_once(self):
+        # 查找机器人法兰位姿或者 Tracker 位姿
         T_reference_parent = self.lookup_transform(
             self.reference_frame,
             self.parent_frame,
@@ -77,6 +79,7 @@ class ToolCalibrator(Node):
         return True
 
     def lookup_transform(self, parent_frame, child_frame):
+        # 查找并保存robot_flange在robot_base下的旋转和平移
         try:
             T_parent_child_msg = self.tf_buffer.lookup_transform(
                 parent_frame,
@@ -110,6 +113,14 @@ class ToolCalibrator(Node):
             )
             return None
 
+        # 根据采样点的rotation和translation构建matrix和vector,用于最小二乘法求解
+        # 优化问题为R_i x + t_i = p，其中t_i为采样点的translation，p为空间固定点，x为工具tip在父坐标系下的偏移量
+        # R_i x + t_i = p
+        # R_i x - p = -t_i
+        # [R_i  -I] [x] = -t_i
+        #           [p]
+        # [R_i  -I] 组成matrix_rows,[-t_i] 组成vector_rows
+        # 如果有N个样本，则matrix尺寸为 3Nx6, vector尺寸为 3Nx1
         matrix_rows = []
         vector_rows = []
         rotations = []
@@ -129,12 +140,16 @@ class ToolCalibrator(Node):
 
         matrix = np.vstack(matrix_rows)
         vector = np.hstack(vector_rows)
+
+        # 调用numpy的最小二乘法求解器求解线性方程组，其中sigular_values用于判断方程条件好不好
+        # 如果有奇异值接近0，说明标定数据退化，比如姿态变化太少
         solution, residuals, rank, singular_values = np.linalg.lstsq(
             matrix,
             vector,
             rcond=None,
         )
 
+        # 整理并保存标定解
         tip_offset = solution[0:3]
         pivot_point = solution[3:6]
         estimated_tip_points = np.array([
