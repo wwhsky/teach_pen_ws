@@ -182,7 +182,6 @@ private:
   bool sampleOnce(const std::string & reason)
   {
     try {
-      // T_A_B means the pose of frame B in frame A.
       const auto T_base_tip_msg = m_tf_buffer->lookupTransform(
         m_base_frame,
         m_tip_frame,

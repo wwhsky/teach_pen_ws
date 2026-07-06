@@ -47,8 +47,6 @@ std::mutex g_replay_node_mutex;
 std::weak_ptr<ReplayPathNode> g_replay_node;
 std::atomic_bool g_sigint_seen{false};
 
-// Transform naming convention: T_A_B means the pose of frame B in frame A.
-// It also transforms a point expressed in B into the same point expressed in A.
 class ReplayPathNode : public rclcpp::Node
 {
 public:

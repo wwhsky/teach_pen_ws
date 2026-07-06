@@ -12,8 +12,6 @@ from tf2_ros import TransformException
 from tf2_ros import TransformListener
 
 
-# Transform naming convention: T_A_B means the pose of frame B in frame A.
-# R_A_B and t_A_B follow the same direction.
 # 四元数转旋转矩阵
 def quaternion_to_rotation_matrix(quaternion):
     x, y, z, w = quaternion
