@@ -7,6 +7,189 @@
 - `teach_pen`：项目自己的业务包，包含示教路径采集、路径回放、焊缝感知和 JAKA 轨迹执行节点。
 - `jaka_ros2`：JAKA 机械臂的描述、MoveIt 配置、仿真和实机接口。
 
+## 常用命令
+
+### 构建
+
+当前环境如果处在 conda `base`，直接 `colcon build` 可能会使用
+`~/miniconda3/bin/python3`，导致 ROS2 的 Python 依赖解析失败。建议使用系统
+Python 构建：
+
+```bash
+cd ~/code/teach_pen_ws
+source /opt/ros/humble/setup.bash
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/ros/humble/bin
+colcon build --packages-select teach_pen --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+source install/setup.bash
+```
+
+如果改了 CMake 或依赖关系，可以加：
+
+```bash
+colcon build --packages-select teach_pen --cmake-clean-cache --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+```
+
+### 启动机器人主环境
+
+实机主线：
+
+```bash
+ros2 launch teach_pen real_robot.launch.py ip:=<机械臂IP> model:=zu5
+```
+
+如果只想启动模型、TF、MoveIt 和 RViz，不启动实机执行端：
+
+```bash
+ros2 launch teach_pen real_robot.launch.py \
+  ip:=<机械臂IP> \
+  model:=zu5 \
+  start_executor:=false
+```
+
+### 采集示教轨迹
+
+默认从 `robot_base <- teaching_pen_tip` 采样，保存到
+`config/paths/demo_path.yaml`：
+
+```bash
+ros2 run teach_pen collect_path_node --ros-args \
+  -p base_frame:=robot_base \
+  -p tip_frame:=teaching_pen_tip \
+  -p output_file:=config/paths/demo_path.yaml
+```
+
+键盘操作：
+
+```text
+Space  单点采样
+r      开始/停止连续录制
+u      撤销上一点
+s      保存
+q      退出
+```
+
+### 计算拍照位姿
+
+根据录制轨迹计算：
+
+```text
+P_center = 轨迹点位置平均
+z_avg = 示教笔 z 轴平均后归一化
+P_photo = P_center + z_avg * photo_distance
+```
+
+运行：
+
+```bash
+ros2 run teach_pen teach_process_node --ros-args \
+  -p input_file:=config/paths/demo_path.yaml \
+  -p output_file:=config/paths/photo_pose.yaml \
+  -p photo_distance:=0.30
+```
+
+输出：
+
+```text
+/teach_process/photo_pose
+config/paths/photo_pose.yaml
+```
+
+注意：录制轨迹时要尽量保持示教笔 z 轴方向一致。如果
+`z_axis_consistency` 太低，说明录制过程中姿态变化太大，拍照位姿不可靠。
+
+### 手动移动到拍照位姿
+
+第一版先用 `replay_path_node` 手动执行 `photo_pose.yaml`：
+
+```bash
+ros2 run teach_pen replay_path_node --ros-args \
+  -p input_file:=config/paths/photo_pose.yaml \
+  -p path_mode:=joint
+```
+
+如果要走笛卡尔插补：
+
+```bash
+ros2 run teach_pen replay_path_node --ros-args \
+  -p input_file:=config/paths/photo_pose.yaml \
+  -p path_mode:=cartesian
+```
+
+注意：`teach_process_node` 只计算拍照位姿，不保证该位姿可达。需要先在
+RViz/MoveIt 中验证可达性和碰撞情况。
+
+### 点云焊缝识别
+
+如果 Ruben 相机节点已经可用，点云会发布到：
+
+```text
+/seam_camera/roi_points
+```
+
+在线识别：
+
+```bash
+ros2 run teach_pen seam_perception_node --ros-args \
+  -p input_cloud_topic:=/seam_camera/roi_points \
+  -p target_frame:=robot_base \
+  -p teaching_path_file:=config/paths/demo_path.yaml \
+  -p hand_eye_file:=config/calibration/camera_hand_eye.yaml \
+  -p path_orientation_file:=config/paths/photo_pose.yaml \
+  -p output_path_file:=config/paths/detected_seam_path.yaml \
+  -p path_roi_radius:=0.05
+```
+
+如果暂时没有相机，可以用点云文件测试：
+
+```bash
+ros2 run teach_pen seam_perception_node --ros-args \
+  -p input_file:=/path/to/cloud.ply \
+  -p input_file_frame:=seam_camera_frame \
+  -p target_frame:=robot_base \
+  -p teaching_path_file:=config/paths/demo_path.yaml \
+  -p hand_eye_file:=config/calibration/camera_hand_eye.yaml \
+  -p path_orientation_file:=config/paths/photo_pose.yaml \
+  -p output_path_file:=config/paths/detected_seam_path.yaml \
+  -p path_roi_radius:=0.05
+```
+
+输出：
+
+```text
+/seam_tracking/measured_path
+/seam_tracking/debug_cloud
+config/paths/detected_seam_path.yaml
+```
+
+当前 `detected_seam_path.yaml` 的位置来自点云检测出的焊缝起点/终点，姿态先复用
+`photo_pose.yaml` 的拍照姿态。真实焊接姿态后续需要根据焊枪工具轴、工作角和行走角再生成。
+
+### 手动执行检测出的焊缝路径
+
+```bash
+ros2 run teach_pen replay_path_node --ros-args \
+  -p input_file:=config/paths/detected_seam_path.yaml \
+  -p path_mode:=cartesian
+```
+
+如果笛卡尔路径失败，可以先用关节模式验证可达性：
+
+```bash
+ros2 run teach_pen replay_path_node --ros-args \
+  -p input_file:=config/paths/detected_seam_path.yaml \
+  -p path_mode:=joint
+```
+
+### 当前 Demo 注意事项
+
+- `config/calibration/camera_hand_eye.yaml` 目前是占位值，必须填入真实
+  `robot_flange -> seam_camera_frame` 手眼标定，否则点云转到 `robot_base` 会不准。
+- `ruben_camera_node.cpp` 已有源码，但默认在 CMake 中注释掉。等 Ruben/RVC SDK 完整后再打开构建。
+- 当前点云识别假设 ROI 内主要是角焊缝两侧平面，通过两平面 RANSAC 求交线。
+- `path_roi_radius` 控制点云距离示教轨迹多远会被保留，初值可以用 `0.03` 到 `0.08` 米试。
+- 当前焊缝路径只保存起点和终点，姿态复用拍照姿态；这只用于打通 demo，不等价于最终焊接工艺姿态。
+- 实机执行前先在 RViz 中检查 TF、点云、检测路径和规划轨迹，确认没有明显坐标系错误或碰撞。
+
 ## ROS2 通信关系
 
 本项目里主要用到五类 ROS2 通信方式：

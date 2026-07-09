@@ -1,0 +1,14 @@
+calibration_result:
+  type: eye_in_hand_camera_transform
+  description: Hand-eye calibration for the Ruben camera mounted on the robot flange. Replace translation and rotation_xyzw with calibrated values.
+  parent_frame: robot_flange
+  child_frame: seam_camera_frame
+  translation:
+    - 0.0
+    - 0.0
+    - 0.0
+  rotation_xyzw:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
