@@ -38,7 +38,6 @@ public:
     m_auto_power_on = declare_parameter<bool>("auto_power_on", true);
     m_auto_enable = declare_parameter<bool>("auto_enable", true);
     m_debug_servo_timing = declare_parameter<bool>("debug_servo_timing", false);
-
     m_joint_state_pub = create_publisher<sensor_msgs::msg::JointState>("/joint_states", 10);
 
     connectRobot();
@@ -90,21 +89,28 @@ private:
       rclcpp::sleep_for(std::chrono::seconds(4));
     }
 
-    setEmptyPayload();
+    setConfiguredPayload();
     logCurrentPayload();
   }
 
-  void setEmptyPayload()
+  void setConfiguredPayload()
   {
     PayLoad payload{};
-    payload.mass = 0.0;
+    payload.mass = 1.684;
     payload.centroid.x = 0.0;
-    payload.centroid.y = 0.0;
-    payload.centroid.z = 0.0;
+    payload.centroid.y = 85.0;
+    payload.centroid.z = 10.0;
     payload.payload_id = 0;
 
     const int result = m_robot.set_payload(&payload);
-    RCLCPP_INFO(get_logger(), "JAKA set_payload empty result: %d", result);
+    RCLCPP_INFO(
+      get_logger(),
+      "JAKA set_payload result: %d mass=%.3f kg centroid=[%.3f, %.3f, %.3f] mm",
+      result,
+      payload.mass,
+      payload.centroid.x,
+      payload.centroid.y,
+      payload.centroid.z);
   }
 
   void logCurrentPayload()

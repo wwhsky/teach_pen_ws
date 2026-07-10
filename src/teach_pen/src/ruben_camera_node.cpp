@@ -7,18 +7,18 @@
 #include <opencv2/core.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <pcl_conversions/pcl_conversions.h>
 #include <rclcpp/rclcpp.hpp>
-#include <ruben_msgs/srv/ru_ben_image_and_point_cloud.hpp>
+#include <ruben_msgs/srv/ruben_service.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/msg/point_field.hpp>
 
 #include "ruben_sdk_lib/ruben_sdk.h"
 
 class RubenCameraNode : public rclcpp::Node
 {
 public:
-  using CaptureService = ruben_msgs::srv::RuBenImageAndPointCloud;
+  using CaptureService = ruben_msgs::srv::RubenService;
 
   RubenCameraNode()
   : Node("ruben_camera_node")
@@ -30,14 +30,16 @@ public:
     m_point_cloud_topic =
       declare_parameter<std::string>("point_cloud_topic", "/seam_camera/roi_points");
     m_capture_once_on_start = declare_parameter<bool>("capture_once_on_start", false);
+    m_camera_id = declare_parameter<std::string>("camera_id", "M3GM620B009");
+    m_camera_param_file = declare_parameter<std::string>("camera_param_file", "CameraSettingweld.json");
 
     m_camera_sdk = std::make_unique<RubenSDK>();
-    if (!m_camera_sdk->Connect()) {
-      RCLCPP_ERROR(get_logger(), "failed to connect Ruben camera");
+    if (!m_camera_sdk->Connect(m_camera_id)) {
+      RCLCPP_ERROR(get_logger(), "failed to connect Ruben camera: %s", m_camera_id.c_str());
       return;
     }
 
-    if (!m_camera_sdk->Open()) {
+    if (!m_camera_sdk->Open(m_camera_param_file)) {
       RCLCPP_ERROR(get_logger(), "failed to open Ruben camera");
       m_camera_sdk->Disconnect();
       return;
@@ -47,8 +49,9 @@ public:
     RCLCPP_INFO(get_logger(), "Ruben camera ready, SN: %s", m_camera_sdk->m_device_info.sn);
 
     m_rgb_pub = create_publisher<sensor_msgs::msg::Image>(m_rgb_topic, 10);
-    m_point_cloud_pub =
-      create_publisher<sensor_msgs::msg::PointCloud2>(m_point_cloud_topic, rclcpp::SensorDataQoS());
+    m_point_cloud_pub = create_publisher<sensor_msgs::msg::PointCloud2>(
+      m_point_cloud_topic,
+      rclcpp::QoS(rclcpp::KeepLast(1)).reliable());
     m_capture_service = create_service<CaptureService>(
       m_capture_service_name,
       std::bind(
@@ -84,11 +87,11 @@ private:
     const std::shared_ptr<CaptureService::Request> request,
     std::shared_ptr<CaptureService::Response> response)
   {
-    if (!request->input_str.empty() && request->input_str != "capture") {
+    if (!request->input.empty() && request->input != "capture") {
       RCLCPP_WARN(
         get_logger(),
         "unsupported capture command: %s",
-        request->input_str.c_str());
+        request->input.c_str());
       return;
     }
 
@@ -132,9 +135,7 @@ private:
       return false;
     }
 
-    pcl::toROSMsg(*point_cloud, cloud_msg);
-    cloud_msg.header.stamp = stamp;
-    cloud_msg.header.frame_id = m_frame_id;
+    cloud_msg = pointCloudToRosMsg(*point_cloud, stamp);
     m_point_cloud_pub->publish(cloud_msg);
 
     RCLCPP_INFO(
@@ -167,12 +168,53 @@ private:
     return msg;
   }
 
+  sensor_msgs::msg::PointCloud2 pointCloudToRosMsg(
+    const pcl::PointCloud<pcl::PointXYZ> & cloud,
+    const rclcpp::Time & stamp) const
+  {
+    sensor_msgs::msg::PointCloud2 msg;
+    msg.header.stamp = stamp;
+    msg.header.frame_id = m_frame_id;
+    msg.height = 1;
+    msg.width = static_cast<uint32_t>(cloud.points.size());
+    msg.is_bigendian = false;
+    msg.is_dense = cloud.is_dense;
+    msg.point_step = 3 * sizeof(float);
+    msg.row_step = msg.point_step * msg.width;
+
+    msg.fields.resize(3);
+    msg.fields[0].name = "x";
+    msg.fields[0].offset = 0;
+    msg.fields[0].datatype = sensor_msgs::msg::PointField::FLOAT32;
+    msg.fields[0].count = 1;
+    msg.fields[1].name = "y";
+    msg.fields[1].offset = sizeof(float);
+    msg.fields[1].datatype = sensor_msgs::msg::PointField::FLOAT32;
+    msg.fields[1].count = 1;
+    msg.fields[2].name = "z";
+    msg.fields[2].offset = 2 * sizeof(float);
+    msg.fields[2].datatype = sensor_msgs::msg::PointField::FLOAT32;
+    msg.fields[2].count = 1;
+
+    msg.data.resize(static_cast<size_t>(msg.row_step));
+    for (size_t i = 0; i < cloud.points.size(); ++i) {
+      const auto & point = cloud.points[i];
+      auto * ptr = msg.data.data() + i * msg.point_step;
+      std::memcpy(ptr + msg.fields[0].offset, &point.x, sizeof(float));
+      std::memcpy(ptr + msg.fields[1].offset, &point.y, sizeof(float));
+      std::memcpy(ptr + msg.fields[2].offset, &point.z, sizeof(float));
+    }
+    return msg;
+  }
+
   std::unique_ptr<RubenSDK> m_camera_sdk;
   bool m_camera_ready{false};
   std::string m_frame_id;
   std::string m_capture_service_name;
   std::string m_rgb_topic;
   std::string m_point_cloud_topic;
+  std::string m_camera_id;
+  std::string m_camera_param_file;
   bool m_capture_once_on_start{false};
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr m_rgb_pub;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr m_point_cloud_pub;

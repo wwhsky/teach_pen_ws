@@ -4,11 +4,11 @@ calibration_result:
   parent_frame: robot_flange
   child_frame: seam_camera_frame
   translation:
-    - 0.0
-    - 0.0
-    - 0.0
+    - -0.023638946
+    - 0.093164268
+    - 0.032806896
   rotation_xyzw:
-    - 0.0
-    - 0.0
-    - 0.0
-    - 1.0
+    - -0.01250241637991236
+    - 0.009746351121141583
+    - -0.709305010247636
+    - 0.7047234213945835

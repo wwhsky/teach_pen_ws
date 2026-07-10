@@ -1,4 +1,111 @@
-parent_frame: robot_flange
-child_frame: welding_torch_tip
-translation: [0.0024872678777074896, 0.04989020346899347, 0.3056039337179699]
-rotation_xyzw: [-0.258262, 0.000000, 0.000000, 0.966075]
+created_at: '2026-07-10T15:40:07'
+tool: welding_torch
+frames:
+  reference_frame: robot_base
+  parent_frame: robot_flange
+  tip_frame: welding_torch_tip
+sample_count: 4
+samples:
+- index: 1
+  transform:
+    stamp:
+      sec: 1783668896
+      nanosec: 465769434
+    parent_frame: robot_base
+    child_frame: robot_flange
+    translation:
+    - -0.4692508907297704
+    - -0.09143148278608894
+    - 0.26438487840757147
+    rotation_xyzw:
+    - -0.5761269188549334
+    - 0.7471436053330548
+    - 0.29115464847892125
+    - -0.15837669351821054
+- index: 2
+  transform:
+    stamp:
+      sec: 1783668980
+      nanosec: 861681653
+    parent_frame: robot_base
+    child_frame: robot_flange
+    translation:
+    - -0.491318069711929
+    - 0.09304818394208923
+    - 0.27836107250721537
+    rotation_xyzw:
+    - 0.808175034758455
+    - -0.5066614244846359
+    - -0.14271198656282327
+    - 0.26416018440268824
+- index: 3
+  transform:
+    stamp:
+      sec: 1783669112
+      nanosec: 139801936
+    parent_frame: robot_base
+    child_frame: robot_flange
+    translation:
+    - -0.5921084266760476
+    - 0.21582399757232643
+    - 0.2475649474250298
+    rotation_xyzw:
+    - 0.9148754295359321
+    - -0.17134234962477282
+    - -0.06431600069012586
+    - 0.35987247701336317
+- index: 4
+  transform:
+    stamp:
+      sec: 1783669201
+      nanosec: 632067446
+    parent_frame: robot_base
+    child_frame: robot_flange
+    translation:
+    - -0.6693875935801955
+    - -0.12010361013591496
+    - 0.34482871603599174
+    rotation_xyzw:
+    - -0.18876773391504356
+    - 0.9756878637922888
+    - 0.10473205380448698
+    - 0.03783030513904929
+calibration_result:
+  type: pivot_calibration_translation_only
+  description: Computed by keeping the tool tip fixed at one physical pivot point
+    and moving the parent frame through different orientations. Rotation is left as
+    identity and can be edited manually.
+  parent_frame: robot_flange
+  child_frame: welding_torch_tip
+  translation:
+  - -0.0011674890181241635
+  - 0.05316054604140549
+  - 0.29419419675636804
+  rotation_xyzw:
+  - -0.258262
+  - 0.0
+  - 0.0
+  - 0.966075
+  reference_frame: robot_base
+  pivot_point_in_reference_frame:
+  - -0.6781525485295266
+  - -0.007247859670369705
+  - 0.0679169924766593
+  sample_count: 4
+  rank: 6
+  residuals:
+  - 3.9613857100902006e-07
+  singular_values:
+  - 2.821153925630367
+  - 2.556257636433852
+  - 2.548285675613792
+  - 1.227289743891621
+  - 1.2105977433374058
+  - 0.2027079867700347
+  mean_error: 0.0003003646532742107
+  max_error: 0.0004422593175997672
+  per_sample_errors:
+  - 0.00017926270557768996
+  - 0.0004422593175997672
+  - 0.00030107966819475316
+  - 0.0002788569217246324

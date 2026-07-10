@@ -72,6 +72,8 @@ public:
         m_path_mode = declare_parameter<std::string>("path_mode", "cartesian");
         m_velocity_scaling = declare_parameter<double>("velocity_scaling", 0.05);
         m_acceleration_scaling = declare_parameter<double>("acceleration_scaling", 0.05);
+        m_move_home_on_start = declare_parameter<bool>("move_home_on_start", true);
+        m_return_home_on_finish = declare_parameter<bool>("return_home_on_finish", true);
         if (!has_parameter("use_sim_time")) {
             declare_parameter<bool>("use_sim_time", false);
         }
@@ -841,6 +843,11 @@ public:
 
     void returnHomeAfterFailure(const std::string & reason)
     {
+        if (!m_return_home_on_finish) {
+            RCLCPP_WARN(this->get_logger(), "%s，return_home_on_finish=false，不回 home", reason.c_str());
+            return;
+        }
+
         RCLCPP_WARN(this->get_logger(), "%s，尝试回 home", reason.c_str());
         if (!planAndMaybeExecuteHome("home after failure")) {
             RCLCPP_ERROR(this->get_logger(), "失败后回 home 也失败");
@@ -854,8 +861,12 @@ public:
             return;
         }
 
-        if (!planAndMaybeExecuteHome("home start")) {
-            return;
+        if (m_move_home_on_start) {
+            if (!planAndMaybeExecuteHome("home start")) {
+                return;
+            }
+        } else {
+            RCLCPP_INFO(this->get_logger(), "move_home_on_start=false; skip home start");
         }
 
         // 首先移动到轨迹开始点
@@ -903,7 +914,11 @@ public:
             return;
         }
 
-        planAndMaybeExecuteHome("home end");
+        if (m_return_home_on_finish) {
+            planAndMaybeExecuteHome("home end");
+        } else {
+            RCLCPP_INFO(this->get_logger(), "return_home_on_finish=false; skip home end");
+        }
     }
 
 private:
@@ -926,6 +941,8 @@ private:
     std::string m_path_mode;
     double m_velocity_scaling;
     double m_acceleration_scaling;
+    bool m_move_home_on_start;
+    bool m_return_home_on_finish;
     bool m_enable_table_collision;
     std::string m_table_frame;
     double m_table_z;

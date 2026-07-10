@@ -13,6 +13,7 @@ find_package(control_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -22,11 +23,8 @@ find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_core REQUIRED)
 find_package(shape_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
-# Ruben SDK is not required for the default build because the local RVC SDK may
-# be absent. Keep src/ruben_camera_node.cpp as the integration stub and enable
-# these lines when ruben_sdk_lib/ruben_msgs are available.
-# find_package(ruben_sdk_lib REQUIRED)
-# find_package(ruben_msgs REQUIRED)
+find_package(ruben_sdk_lib REQUIRED)
+find_package(ruben_msgs REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common filters segmentation)
 
 set(JAKA_PLANNER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../jaka_ros2/src/jaka_planner)
@@ -66,19 +64,18 @@ ament_target_dependencies(teach_process_node
 )
 target_link_libraries(teach_process_node yaml-cpp)
 
-# add_executable(ruben_camera_node src/ruben_camera_node.cpp)
-# target_include_directories(ruben_camera_node PRIVATE ${PCL_INCLUDE_DIRS})
-# ament_target_dependencies(ruben_camera_node
-#   rclcpp
-#   sensor_msgs
-#   pcl_conversions
-#   ruben_sdk_lib
-#   ruben_msgs
-# )
-# target_link_libraries(ruben_camera_node
-#   ruben_sdk_lib::ruben_sdk_lib
-#   ${PCL_LIBRARIES}
-# )
+add_executable(ruben_camera_node src/ruben_camera_node.cpp)
+target_include_directories(ruben_camera_node PRIVATE ${PCL_INCLUDE_DIRS})
+ament_target_dependencies(ruben_camera_node
+  rclcpp
+  sensor_msgs
+  cv_bridge
+  ruben_sdk_lib
+  ruben_msgs
+)
+target_link_libraries(ruben_camera_node
+  ruben_sdk_lib::ruben_sdk_lib
+)
 
 add_executable(replay_path_node src/replay_path_node.cpp)
 ament_target_dependencies(replay_path_node
@@ -116,6 +113,7 @@ install(TARGETS
   collect_path_node
   seam_perception_node
   teach_process_node
+  ruben_camera_node
   replay_path_node
   jaka_trajectory_executor_node
   DESTINATION lib/${PROJECT_NAME}

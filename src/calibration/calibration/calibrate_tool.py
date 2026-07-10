@@ -1,5 +1,6 @@
 import threading
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import rclpy
@@ -10,6 +11,31 @@ from rclpy.time import Time
 from tf2_ros import Buffer
 from tf2_ros import TransformException
 from tf2_ros import TransformListener
+
+
+TOOL_PRESETS = {
+    "welding_torch": {
+        "reference_frame": "robot_base",
+        "parent_frame": "robot_flange",
+        "tip_frame": "welding_torch_tip",
+        "output_file": "config/calibration/welding_torch_tip.yaml",
+    },
+    "teaching_pen": {
+        "reference_frame": "steamvr_base",
+        "parent_frame": "tracker_frame",
+        "tip_frame": "teaching_pen_tip",
+        "output_file": "config/calibration/teaching_pen_tip.yaml",
+    },
+}
+
+TOOL_ALIASES = {
+    "torch": "welding_torch",
+    "welding": "welding_torch",
+    "welding_torch": "welding_torch",
+    "teachpen": "teaching_pen",
+    "teaching_pen": "teaching_pen",
+    "pen": "teaching_pen",
+}
 
 
 # 四元数转旋转矩阵
@@ -31,21 +57,29 @@ class ToolCalibrator(Node):
     def __init__(self):
         super().__init__("calibrate_tool")
 
-        self.declare_parameter("reference_frame", "robot_base")
-        self.declare_parameter("parent_frame", "robot_flange")
-        self.declare_parameter("tip_frame", "welding_torch_tip")
-        self.declare_parameter("output_file", "tool_calibration.yaml")
+        self.declare_parameter("tool", "welding_torch")
+        self.declare_parameter("output_file", "")
         self.declare_parameter("min_samples", 4)
 
-        self.reference_frame = self.get_parameter("reference_frame").value
-        self.parent_frame = self.get_parameter("parent_frame").value
-        self.tip_frame = self.get_parameter("tip_frame").value
-        self.output_file = self.get_parameter("output_file").value
+        self.tool = self.normalize_tool_name(self.get_parameter("tool").value)
+        preset = TOOL_PRESETS[self.tool]
+
+        self.reference_frame = preset["reference_frame"]
+        self.parent_frame = preset["parent_frame"]
+        self.tip_frame = preset["tip_frame"]
+        self.output_file = self.get_parameter("output_file").value or preset["output_file"]
         self.min_samples = int(self.get_parameter("min_samples").value)
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.samples = []
+
+    def normalize_tool_name(self, tool):
+        key = str(tool).strip().lower().replace("-", "_")
+        if key not in TOOL_ALIASES:
+            valid_tools = ", ".join(sorted(set(TOOL_ALIASES)))
+            raise ValueError(f"unknown tool '{tool}', expected one of: {valid_tools}")
+        return TOOL_ALIASES[key]
 
     def sample_once(self):
         # 查找机器人法兰位姿或者 Tracker 位姿
@@ -193,9 +227,47 @@ class ToolCalibrator(Node):
             "per_sample_errors": errors.tolist(),
         }
 
+    def load_existing_rotation(self):
+        path = Path(self.output_file).expanduser()
+        if not path.exists():
+            return None
+
+        try:
+            with path.open("r", encoding="utf-8") as file:
+                data = yaml.safe_load(file)
+        except (OSError, yaml.YAMLError) as error:
+            self.get_logger().warn(f"failed to read existing calibration rotation: {error}")
+            return None
+
+        if not isinstance(data, dict):
+            return None
+
+        transform_data = data.get("calibration_result", data)
+        if not isinstance(transform_data, dict):
+            return None
+
+        rotation = transform_data.get("rotation_xyzw")
+        if not isinstance(rotation, list) or len(rotation) != 4:
+            return None
+
+        try:
+            return [float(value) for value in rotation]
+        except (TypeError, ValueError):
+            return None
+
     def save(self):
+        calibration_result = self.compute_calibration()
+        existing_rotation = self.load_existing_rotation()
+        if calibration_result is not None and existing_rotation is not None:
+            calibration_result["rotation_xyzw"] = existing_rotation
+            self.get_logger().info(
+                "kept existing %s -> %s rotation_xyzw while updating pivot translation"
+                % (self.parent_frame, self.tip_frame)
+            )
+
         data = {
             "created_at": datetime.now().isoformat(timespec="seconds"),
+            "tool": self.tool,
             "frames": {
                 "reference_frame": self.reference_frame,
                 "parent_frame": self.parent_frame,
@@ -203,9 +275,10 @@ class ToolCalibrator(Node):
             },
             "sample_count": len(self.samples),
             "samples": self.samples,
-            "calibration_result": self.compute_calibration(),
+            "calibration_result": calibration_result,
         }
 
+        Path(self.output_file).expanduser().parent.mkdir(parents=True, exist_ok=True)
         with open(self.output_file, "w", encoding="utf-8") as file:
             yaml.safe_dump(data, file, sort_keys=False)
 
@@ -223,6 +296,7 @@ def main():
 
     print("")
     print("Tool pivot calibrator")
+    print(f"  Tool:      {node.tool}")
     print(f"  Sample TF: {node.reference_frame} <- {node.parent_frame}")
     print(f"  Result TF: {node.parent_frame} -> {node.tip_frame}")
     print(f"  Output:    {node.output_file}")

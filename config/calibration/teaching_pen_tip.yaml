@@ -1,74 +1,1899 @@
-created_at: '2026-06-30T15:06:58'
+created_at: '2026-07-09T17:26:13'
+tool: teaching_pen
 frames:
   reference_frame: steamvr_base
   parent_frame: tracker_frame
   tip_frame: teaching_pen_tip
-sample_count: 4
+sample_count: 118
 samples:
 - index: 1
   transform:
     stamp:
-      sec: 1782803165
-      nanosec: 975754236
+      sec: 1783589136
+      nanosec: 527225533
     parent_frame: steamvr_base
     child_frame: tracker_frame
     translation:
-    - -0.1364191621541977
-    - -0.3474828898906708
-    - -1.0506117343902588
+    - -0.02921113185584545
+    - -0.49957871437072754
+    - -1.301934838294983
     rotation_xyzw:
-    - -0.48106369247294173
-    - 0.7884152130570403
-    - -0.24946156909556355
-    - -0.29111527123959036
+    - 0.7485718625104517
+    - 0.31329157227023996
+    - -0.5152812355437957
+    - 0.2756334625885141
 - index: 2
   transform:
     stamp:
-      sec: 1782803171
-      nanosec: 505945898
+      sec: 1783589136
+      nanosec: 787229164
     parent_frame: steamvr_base
     child_frame: tracker_frame
     translation:
-    - -0.003678644774481654
-    - -0.42264237999916077
-    - -1.3121200799942017
+    - -0.020359259098768234
+    - -0.5015619397163391
+    - -1.310970425605774
     rotation_xyzw:
-    - 0.19850622105543256
-    - -0.5502143146738615
-    - 0.12171360492586603
-    - 0.8019010453330354
+    - 0.7389925864989786
+    - 0.30409120771872705
+    - -0.5379459784112288
+    - 0.26838893196050684
 - index: 3
   transform:
     stamp:
-      sec: 1782803196
-      nanosec: 76897619
+      sec: 1783589137
+      nanosec: 27286944
     parent_frame: steamvr_base
     child_frame: tracker_frame
     translation:
-    - -0.2398928850889206
-    - -0.257619172334671
-    - -1.2976477146148682
+    - -0.011052748188376427
+    - -0.4985133111476898
+    - -1.3515645265579224
     rotation_xyzw:
-    - 0.5164970557629472
-    - -0.32935887034923983
-    - 0.5693019206027807
-    - 0.5483145530701012
+    - 0.6728396101756586
+    - 0.30847472616435995
+    - -0.6187092880857482
+    - 0.26330404313818917
 - index: 4
   transform:
     stamp:
-      sec: 1782803208
-      nanosec: 656854224
+      sec: 1783589137
+      nanosec: 257301713
     parent_frame: steamvr_base
     child_frame: tracker_frame
     translation:
-    - -0.02032710611820221
-    - -0.4435823857784271
-    - -1.1000475883483887
+    - -0.010082663968205452
+    - -0.49872535467147827
+    - -1.3966503143310547
     rotation_xyzw:
-    - -0.49469152838374203
-    - 0.7513326752531384
-    - 0.07264915531230667
-    - -0.430698970366459
+    - -0.5883907769788609
+    - -0.31563471421765643
+    - 0.7023211093205547
+    - -0.24681183146214103
+- index: 5
+  transform:
+    stamp:
+      sec: 1783589137
+      nanosec: 517370580
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.01955818571150303
+    - -0.5007436275482178
+    - -1.4363802671432495
+    rotation_xyzw:
+    - -0.48453706829725907
+    - -0.3376481519239843
+    - 0.7810909254066479
+    - -0.20276716005211923
+- index: 6
+  transform:
+    stamp:
+      sec: 1783589137
+      nanosec: 787477816
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.034371934831142426
+    - -0.5043812990188599
+    - -1.4683067798614502
+    rotation_xyzw:
+    - -0.3866721202043285
+    - -0.349430843071971
+    - 0.8391126327065973
+    - -0.1557971341164659
+- index: 7
+  transform:
+    stamp:
+      sec: 1783589138
+      nanosec: 87468576
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.05920549854636192
+    - -0.5063860416412354
+    - -1.4942011833190918
+    rotation_xyzw:
+    - -0.27990709385205864
+    - -0.36035166472426106
+    - 0.8831777671622794
+    - -0.10860814026581635
+- index: 8
+  transform:
+    stamp:
+      sec: 1783589138
+      nanosec: 317547464
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.07836690545082092
+    - -0.5073708295822144
+    - -1.5064973831176758
+    rotation_xyzw:
+    - -0.20513554209488316
+    - -0.36622601112636066
+    - 0.9047149569047702
+    - -0.07272389495009868
+- index: 9
+  transform:
+    stamp:
+      sec: 1783589138
+      nanosec: 507541446
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.05978607386350632
+    - -0.5093050599098206
+    - -1.4979649782180786
+    rotation_xyzw:
+    - -0.27373980009388166
+    - -0.35133226385027044
+    - 0.8888957981992959
+    - -0.10722136991310272
+- index: 10
+  transform:
+    stamp:
+      sec: 1783589138
+      nanosec: 677588283
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.038824643939733505
+    - -0.5072709918022156
+    - -1.476830005645752
+    rotation_xyzw:
+    - -0.35217680057206646
+    - -0.3492382531083104
+    - 0.8582950120199586
+    - -0.13165795094234814
+- index: 11
+  transform:
+    stamp:
+      sec: 1783589138
+      nanosec: 917617614
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.021916555240750313
+    - -0.5039187073707581
+    - -1.447275996208191
+    rotation_xyzw:
+    - -0.43681164369380104
+    - -0.35009942579867653
+    - 0.8128824428084511
+    - -0.16077348712621128
+- index: 12
+  transform:
+    stamp:
+      sec: 1783589139
+      nanosec: 147639576
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.012342889793217182
+    - -0.5027199387550354
+    - -1.4238996505737305
+    rotation_xyzw:
+    - -0.4955539471531847
+    - -0.3482667997816147
+    - 0.7756695432542515
+    - -0.17740710611052798
+- index: 13
+  transform:
+    stamp:
+      sec: 1783589139
+      nanosec: 367692221
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.011292283423244953
+    - -0.5005276799201965
+    - -1.4099925756454468
+    rotation_xyzw:
+    - -0.5462927681329716
+    - -0.32736736196780153
+    - 0.7383849385541338
+    - -0.22177128831358173
+- index: 14
+  transform:
+    stamp:
+      sec: 1783589139
+      nanosec: 557685417
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.011058636009693146
+    - -0.4981866776943207
+    - -1.3921781778335571
+    rotation_xyzw:
+    - -0.5903813481989306
+    - -0.31873919575412474
+    - 0.6991047822298563
+    - -0.2471997011571252
+- index: 15
+  transform:
+    stamp:
+      sec: 1783589139
+      nanosec: 747756595
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.014758667908608913
+    - -0.4953218400478363
+    - -1.363824725151062
+    rotation_xyzw:
+    - 0.6562371308256514
+    - 0.301074129065188
+    - -0.6313692233568491
+    - 0.28298427647331315
+- index: 16
+  transform:
+    stamp:
+      sec: 1783589139
+      nanosec: 967815741
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.02326088771224022
+    - -0.49360528588294983
+    - -1.3353705406188965
+    rotation_xyzw:
+    - 0.7208598067431653
+    - 0.27073882774144614
+    - -0.5519292735627795
+    - 0.32005578132546897
+- index: 17
+  transform:
+    stamp:
+      sec: 1783589140
+      nanosec: 227825889
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.0341116338968277
+    - -0.4941311776638031
+    - -1.3090224266052246
+    rotation_xyzw:
+    - 0.7693261338859434
+    - 0.25130452201785053
+    - -0.4823494659941378
+    - 0.33514523655970024
+- index: 18
+  transform:
+    stamp:
+      sec: 1783589140
+      nanosec: 447915137
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.04557975381612778
+    - -0.4964885115623474
+    - -1.2866450548171997
+    rotation_xyzw:
+    - 0.8112091325912795
+    - 0.2258446927438117
+    - -0.41467903112538723
+    - 0.3449278462300011
+- index: 19
+  transform:
+    stamp:
+      sec: 1783589140
+      nanosec: 667915889
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.062336478382349014
+    - -0.49829331040382385
+    - -1.2672924995422363
+    rotation_xyzw:
+    - 0.8476613065007729
+    - 0.19935013448798974
+    - -0.339520559001668
+    - 0.35560599454483083
+- index: 20
+  transform:
+    stamp:
+      sec: 1783589140
+      nanosec: 927955459
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.08481315523386002
+    - -0.5012693405151367
+    - -1.247904896736145
+    rotation_xyzw:
+    - 0.8818276165540399
+    - 0.1637043537580619
+    - -0.252571574419592
+    - 0.36302691227853223
+- index: 21
+  transform:
+    stamp:
+      sec: 1783589141
+      nanosec: 148019599
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.11253931373357773
+    - -0.5029107928276062
+    - -1.2357121706008911
+    rotation_xyzw:
+    - 0.9044275603352249
+    - 0.13235515282237809
+    - -0.16211707954950075
+    - 0.3717673387291829
+- index: 22
+  transform:
+    stamp:
+      sec: 1783589141
+      nanosec: 387969884
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.14617246389389038
+    - -0.503438413143158
+    - -1.2313469648361206
+    rotation_xyzw:
+    - 0.9175057987372143
+    - 0.0912462449617619
+    - -0.0554277429262276
+    - 0.38312530245086734
+- index: 23
+  transform:
+    stamp:
+      sec: 1783589141
+      nanosec: 628068254
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.18075746297836304
+    - -0.5094224214553833
+    - -1.2280246019363403
+    rotation_xyzw:
+    - 0.9233316618461148
+    - 0.07291220590154546
+    - 0.0403907784617772
+    - 0.37484801917352356
+- index: 24
+  transform:
+    stamp:
+      sec: 1783589141
+      nanosec: 878167482
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.20874887704849243
+    - -0.5150119066238403
+    - -1.230648159980774
+    rotation_xyzw:
+    - 0.9204938968581191
+    - 0.06956463001095256
+    - 0.1099857376547628
+    - 0.36844929856213776
+- index: 25
+  transform:
+    stamp:
+      sec: 1783589142
+      nanosec: 158153617
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.22345778346061707
+    - -0.505224347114563
+    - -1.2534546852111816
+    rotation_xyzw:
+    - 0.8982843236693782
+    - 0.05614314709858794
+    - 0.15691060679310834
+    - 0.4065861315386113
+- index: 26
+  transform:
+    stamp:
+      sec: 1783589142
+      nanosec: 388201776
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.22445030510425568
+    - -0.4969193935394287
+    - -1.269955039024353
+    rotation_xyzw:
+    - 0.8818312777086972
+    - 0.058855658523533486
+    - 0.1601653263218972
+    - 0.4396096875167881
+- index: 27
+  transform:
+    stamp:
+      sec: 1783589142
+      nanosec: 618279424
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.218634694814682
+    - -0.4911186993122101
+    - -1.2778737545013428
+    rotation_xyzw:
+    - 0.8734642576400636
+    - 0.072358334921621
+    - 0.13609146257996202
+    - 0.46184800075945964
+- index: 28
+  transform:
+    stamp:
+      sec: 1783589142
+      nanosec: 858282047
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.2010643184185028
+    - -0.4837423861026764
+    - -1.2829093933105469
+    rotation_xyzw:
+    - 0.8675571020050641
+    - 0.08626623757717942
+    - 0.08041732551558778
+    - 0.4831520100048974
+- index: 29
+  transform:
+    stamp:
+      sec: 1783589143
+      nanosec: 78335141
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1848897486925125
+    - -0.48488327860832214
+    - -1.2724604606628418
+    rotation_xyzw:
+    - 0.8790218124699285
+    - 0.08661890572363547
+    - 0.039572303987528444
+    - 0.46717432627493616
+- index: 30
+  transform:
+    stamp:
+      sec: 1783589143
+      nanosec: 358362197
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.17032858729362488
+    - -0.4746076166629791
+    - -1.2926254272460938
+    rotation_xyzw:
+    - 0.8484203770014456
+    - 0.14578695363825506
+    - -0.05259102341537189
+    - 0.5061256882373453
+- index: 31
+  transform:
+    stamp:
+      sec: 1783589143
+      nanosec: 588389806
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.14648962020874023
+    - -0.4734460413455963
+    - -1.2919527292251587
+    rotation_xyzw:
+    - 0.8457322440339624
+    - 0.15535006057311296
+    - -0.12266474395960307
+    - 0.4955367702507388
+- index: 32
+  transform:
+    stamp:
+      sec: 1783589143
+      nanosec: 798449755
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.11566809564828873
+    - -0.48024895787239075
+    - -1.2781568765640259
+    rotation_xyzw:
+    - 0.855454487943303
+    - 0.16427456072266383
+    - -0.19928314481846615
+    - 0.44888496961727237
+- index: 33
+  transform:
+    stamp:
+      sec: 1783589144
+      nanosec: 58446978
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.07524140179157257
+    - -0.49092498421669006
+    - -1.2732293605804443
+    rotation_xyzw:
+    - 0.8589035662018231
+    - 0.14940805833383483
+    - -0.28126017667349384
+    - 0.4010668386794139
+- index: 34
+  transform:
+    stamp:
+      sec: 1783589144
+      nanosec: 298498339
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.04515815153717995
+    - -0.5070016384124756
+    - -1.2649897336959839
+    rotation_xyzw:
+    - 0.8669734663749202
+    - 0.131100230901152
+    - -0.33022530315419324
+    - 0.34945813371023565
+- index: 35
+  transform:
+    stamp:
+      sec: 1783589144
+      nanosec: 558561223
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.017507458105683327
+    - -0.508396565914154
+    - -1.294703483581543
+    rotation_xyzw:
+    - 0.8243056484454366
+    - 0.1449537159789603
+    - -0.4285031927609267
+    - 0.34043153784355984
+- index: 36
+  transform:
+    stamp:
+      sec: 1783589144
+      nanosec: 778603284
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.021918820217251778
+    - -0.49333181977272034
+    - -1.3413448333740234
+    rotation_xyzw:
+    - 0.7525056149671853
+    - 0.1856714658302137
+    - -0.5021100222750673
+    - 0.38359735628683556
+- index: 37
+  transform:
+    stamp:
+      sec: 1783589145
+      nanosec: 38670438
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.04292064905166626
+    - -0.48068130016326904
+    - -1.3666647672653198
+    rotation_xyzw:
+    - 0.6955775588039711
+    - 0.24073855932298188
+    - -0.5377907446423664
+    - 0.41109356686819165
+- index: 38
+  transform:
+    stamp:
+      sec: 1783589145
+      nanosec: 318758060
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.07306284457445145
+    - -0.46953895688056946
+    - -1.3727248907089233
+    rotation_xyzw:
+    - 0.6589973364558711
+    - 0.2995870139346226
+    - -0.5346729343492995
+    - 0.43599883589307115
+- index: 39
+  transform:
+    stamp:
+      sec: 1783589145
+      nanosec: 538743508
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.09060759097337723
+    - -0.46494293212890625
+    - -1.3750927448272705
+    rotation_xyzw:
+    - 0.6106831535288608
+    - 0.36493227166540965
+    - -0.5634468203970339
+    - 0.42002167048575256
+- index: 40
+  transform:
+    stamp:
+      sec: 1783589145
+      nanosec: 808780241
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.10256883502006531
+    - -0.4625576436519623
+    - -1.3743056058883667
+    rotation_xyzw:
+    - -0.5743749952893313
+    - -0.4100270682687307
+    - 0.5815209415613561
+    - -0.4047277635632674
+- index: 41
+  transform:
+    stamp:
+      sec: 1783589146
+      nanosec: 48825355
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.09263858199119568
+    - -0.46539658308029175
+    - -1.352881669998169
+    rotation_xyzw:
+    - -0.5758493403641421
+    - -0.44796213550243713
+    - 0.5907185979972829
+    - -0.3446432943470729
+- index: 42
+  transform:
+    stamp:
+      sec: 1783589146
+      nanosec: 268823925
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.07058028876781464
+    - -0.4725196361541748
+    - -1.3408491611480713
+    rotation_xyzw:
+    - -0.5895558333764384
+    - -0.4502440542108276
+    - 0.6053081667766256
+    - -0.2886281937253039
+- index: 43
+  transform:
+    stamp:
+      sec: 1783589146
+      nanosec: 478909332
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.05211745575070381
+    - -0.4804399013519287
+    - -1.3331634998321533
+    rotation_xyzw:
+    - -0.5967439449212157
+    - -0.45239192957895424
+    - 0.6179934332681575
+    - -0.23942080671723373
+- index: 44
+  transform:
+    stamp:
+      sec: 1783589146
+      nanosec: 678949112
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.0325700044631958
+    - -0.48956501483917236
+    - -1.3317986726760864
+    rotation_xyzw:
+    - -0.6040227433652613
+    - -0.44143197304875054
+    - 0.6335239694051873
+    - -0.19733656239249234
+- index: 45
+  transform:
+    stamp:
+      sec: 1783589146
+      nanosec: 908971731
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.005275786854326725
+    - -0.5032166242599487
+    - -1.346319556236267
+    rotation_xyzw:
+    - -0.6022800676337816
+    - -0.40476226792423375
+    - 0.671301991697616
+    - -0.15092999217747355
+- index: 46
+  transform:
+    stamp:
+      sec: 1783589147
+      nanosec: 129042373
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - 0.013905743137001991
+    - -0.5154032707214355
+    - -1.374403715133667
+    rotation_xyzw:
+    - -0.5823184169131158
+    - -0.35971000242038964
+    - 0.7185397651692721
+    - -0.12334740107928237
+- index: 47
+  transform:
+    stamp:
+      sec: 1783589147
+      nanosec: 359065367
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - 0.01430531032383442
+    - -0.5195175409317017
+    - -1.412736415863037
+    rotation_xyzw:
+    - -0.5343821003905056
+    - -0.3258562792946278
+    - 0.7696793291055183
+    - -0.1258856082885273
+- index: 48
+  transform:
+    stamp:
+      sec: 1783589147
+      nanosec: 579090612
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.0034626696724444628
+    - -0.5163484811782837
+    - -1.4483833312988281
+    rotation_xyzw:
+    - -0.4700188207206072
+    - -0.3122780952745081
+    - 0.8118184225742906
+    - -0.15005181821332758
+- index: 49
+  transform:
+    stamp:
+      sec: 1783589147
+      nanosec: 789129647
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.024878039956092834
+    - -0.509818971157074
+    - -1.4661293029785156
+    rotation_xyzw:
+    - -0.4273789477392333
+    - -0.3150391129525941
+    - 0.8269061407386367
+    - -0.18526690678068305
+- index: 50
+  transform:
+    stamp:
+      sec: 1783589147
+      nanosec: 989189381
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.041845664381980896
+    - -0.5021859407424927
+    - -1.4691476821899414
+    rotation_xyzw:
+    - -0.4098317881927692
+    - -0.3279640718786872
+    - 0.8226043301550972
+    - -0.21863117104738847
+- index: 51
+  transform:
+    stamp:
+      sec: 1783589148
+      nanosec: 189215692
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.05707850307226181
+    - -0.4947890639305115
+    - -1.4679452180862427
+    rotation_xyzw:
+    - -0.39946544047120847
+    - -0.34377852123493546
+    - 0.8124151976953169
+    - -0.24944986823076035
+- index: 52
+  transform:
+    stamp:
+      sec: 1783589148
+      nanosec: 399231103
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.06906495243310928
+    - -0.48983195424079895
+    - -1.4666627645492554
+    rotation_xyzw:
+    - -0.3903141821748752
+    - -0.35700249395468386
+    - 0.8042459206025748
+    - -0.2709106083146452
+- index: 53
+  transform:
+    stamp:
+      sec: 1783589148
+      nanosec: 639266747
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.08352185040712357
+    - -0.48512083292007446
+    - -1.4660011529922485
+    rotation_xyzw:
+    - -0.3743480182009573
+    - -0.37368349003375
+    - 0.7975314624576852
+    - -0.29011683325053317
+- index: 54
+  transform:
+    stamp:
+      sec: 1783589148
+      nanosec: 919321800
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1018035039305687
+    - -0.47760796546936035
+    - -1.4572815895080566
+    rotation_xyzw:
+    - -0.3596929661610641
+    - -0.405921504714757
+    - 0.7814531145989722
+    - -0.308512125836131
+- index: 55
+  transform:
+    stamp:
+      sec: 1783589149
+      nanosec: 159319115
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.110560342669487
+    - -0.46952563524246216
+    - -1.4361741542816162
+    rotation_xyzw:
+    - -0.3765352860017281
+    - -0.44123386441442497
+    - 0.7491856644789832
+    - -0.3197728810088408
+- index: 56
+  transform:
+    stamp:
+      sec: 1783589149
+      nanosec: 429418829
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.12447810173034668
+    - -0.465809166431427
+    - -1.4274585247039795
+    rotation_xyzw:
+    - -0.36296908332064526
+    - -0.46879344715705057
+    - 0.7355094410805698
+    - -0.3278902416012527
+- index: 57
+  transform:
+    stamp:
+      sec: 1783589149
+      nanosec: 689496048
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.13319411873817444
+    - -0.46651819348335266
+    - -1.432634949684143
+    rotation_xyzw:
+    - -0.3651967075393718
+    - -0.46008647493181737
+    - 0.7244923077367177
+    - -0.36064206135383325
+- index: 58
+  transform:
+    stamp:
+      sec: 1783589149
+      nanosec: 929958004
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.12337931990623474
+    - -0.47105106711387634
+    - -1.446828842163086
+    rotation_xyzw:
+    - -0.3765654134696501
+    - -0.42387958096941447
+    - 0.7350687625600953
+    - -0.3717505945173393
+- index: 59
+  transform:
+    stamp:
+      sec: 1783589150
+      nanosec: 219547896
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1060166284441948
+    - -0.4781407415866852
+    - -1.4608346223831177
+    rotation_xyzw:
+    - -0.40380946980763716
+    - -0.37249732701786253
+    - 0.7409555335896136
+    - -0.38622344659685465
+- index: 60
+  transform:
+    stamp:
+      sec: 1783589150
+      nanosec: 449661295
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.09013044089078903
+    - -0.4817347526550293
+    - -1.461606740951538
+    rotation_xyzw:
+    - -0.42789590911512426
+    - -0.3474373516969516
+    - 0.7435040025481596
+    - -0.37867423440632475
+- index: 61
+  transform:
+    stamp:
+      sec: 1783589150
+      nanosec: 689627127
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.069980189204216
+    - -0.48386842012405396
+    - -1.4519673585891724
+    rotation_xyzw:
+    - -0.46662697325457797
+    - -0.330645973400498
+    - 0.7373984133517495
+    - -0.35941075121875643
+- index: 62
+  transform:
+    stamp:
+      sec: 1783589150
+      nanosec: 939648823
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.05469365417957306
+    - -0.484589546918869
+    - -1.4365772008895874
+    rotation_xyzw:
+    - -0.5094714281451742
+    - -0.32096138104758803
+    - 0.7193085340838673
+    - -0.3464359804839265
+- index: 63
+  transform:
+    stamp:
+      sec: 1783589151
+      nanosec: 169714953
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.05041138455271721
+    - -0.4817260503768921
+    - -1.417162299156189
+    rotation_xyzw:
+    - -0.5502440438564539
+    - -0.32299511441517037
+    - 0.6862871892201854
+    - -0.3491640619775829
+- index: 64
+  transform:
+    stamp:
+      sec: 1783589151
+      nanosec: 379776672
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.05150436982512474
+    - -0.4786401689052582
+    - -1.4002138376235962
+    rotation_xyzw:
+    - -0.5811559197406788
+    - -0.32866381321290433
+    - 0.6546153589893375
+    - -0.35456540526393676
+- index: 65
+  transform:
+    stamp:
+      sec: 1783589151
+      nanosec: 629783267
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.05255980044603348
+    - -0.47680339217185974
+    - -1.3787039518356323
+    rotation_xyzw:
+    - 0.6231470929181441
+    - 0.32760220689566194
+    - -0.6112974812697681
+    - 0.3614967275342826
+- index: 66
+  transform:
+    stamp:
+      sec: 1783589151
+      nanosec: 889827342
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.059027235954999924
+    - -0.47484737634658813
+    - -1.358148217201233
+    rotation_xyzw:
+    - 0.6532301045779711
+    - 0.337581854278289
+    - -0.571270072837295
+    - 0.36466344211554375
+- index: 67
+  transform:
+    stamp:
+      sec: 1783589152
+      nanosec: 99870075
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.06600194424390793
+    - -0.47328412532806396
+    - -1.3477600812911987
+    rotation_xyzw:
+    - 0.664060590497203
+    - 0.34850608221408735
+    - -0.5498468613478968
+    - 0.3677437584435127
+- index: 68
+  transform:
+    stamp:
+      sec: 1783589152
+      nanosec: 339903573
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.07515749335289001
+    - -0.47170180082321167
+    - -1.3380407094955444
+    rotation_xyzw:
+    - 0.6766394912914949
+    - 0.35654805262189443
+    - -0.5224952718211716
+    - 0.37687023750999726
+- index: 69
+  transform:
+    stamp:
+      sec: 1783589152
+      nanosec: 659945019
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.08652087301015854
+    - -0.46904855966567993
+    - -1.3352121114730835
+    rotation_xyzw:
+    - 0.6820280027115093
+    - 0.3591145741297989
+    - -0.4983817043618604
+    - 0.39685035331002266
+- index: 70
+  transform:
+    stamp:
+      sec: 1783589152
+      nanosec: 879996663
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.09592604637145996
+    - -0.4665429890155792
+    - -1.3373024463653564
+    rotation_xyzw:
+    - 0.6890280524674111
+    - 0.34776730475671364
+    - -0.4729885970272594
+    - 0.4249470928685153
+- index: 71
+  transform:
+    stamp:
+      sec: 1783589153
+      nanosec: 120050729
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.10563280433416367
+    - -0.46533745527267456
+    - -1.3338958024978638
+    rotation_xyzw:
+    - 0.712408371306468
+    - 0.32424529566253313
+    - -0.4251484283185082
+    - 0.4545196526350476
+- index: 72
+  transform:
+    stamp:
+      sec: 1783589153
+      nanosec: 350078886
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1100551187992096
+    - -0.4645909070968628
+    - -1.3338887691497803
+    rotation_xyzw:
+    - 0.7251537674289201
+    - 0.30413949869074436
+    - -0.396825717952058
+    - 0.47347706226555486
+- index: 73
+  transform:
+    stamp:
+      sec: 1783589153
+      nanosec: 560104940
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.11102749407291412
+    - -0.4651610255241394
+    - -1.3302700519561768
+    rotation_xyzw:
+    - 0.7428540774540547
+    - 0.2822534743091846
+    - -0.36865820824657314
+    - 0.4822778466223656
+- index: 74
+  transform:
+    stamp:
+      sec: 1783589153
+      nanosec: 790141746
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.10876861959695816
+    - -0.46552908420562744
+    - -1.3294464349746704
+    rotation_xyzw:
+    - 0.7582621289732423
+    - 0.2528107357682572
+    - -0.34547789885787866
+    - 0.4917014307951767
+- index: 75
+  transform:
+    stamp:
+      sec: 1783589154
+      nanosec: 50192354
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.10884232074022293
+    - -0.4648890495300293
+    - -1.3326694965362549
+    rotation_xyzw:
+    - 0.7653991471592542
+    - 0.22615554642990401
+    - -0.32514802062308296
+    - 0.5072441020177255
+- index: 76
+  transform:
+    stamp:
+      sec: 1783589154
+      nanosec: 310244471
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.10899563878774643
+    - -0.4659821093082428
+    - -1.3264065980911255
+    rotation_xyzw:
+    - 0.7790026403906285
+    - 0.21210063446673685
+    - -0.30522753661753627
+    - 0.5049795619761531
+- index: 77
+  transform:
+    stamp:
+      sec: 1783589154
+      nanosec: 570286748
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.11615262925624847
+    - -0.4658944606781006
+    - -1.322047472000122
+    rotation_xyzw:
+    - 0.8012375327754783
+    - 0.16585876959926651
+    - -0.23947849949053876
+    - 0.5226464702843041
+- index: 78
+  transform:
+    stamp:
+      sec: 1783589154
+      nanosec: 810308401
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.11800916492938995
+    - -0.46559661626815796
+    - -1.3226643800735474
+    rotation_xyzw:
+    - 0.8053669185199002
+    - 0.14979411198518086
+    - -0.21986732665947994
+    - 0.5297208786105618
+- index: 79
+  transform:
+    stamp:
+      sec: 1783589155
+      nanosec: 80401553
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.12017221748828888
+    - -0.4644623398780823
+    - -1.3268623352050781
+    rotation_xyzw:
+    - 0.8063729323204425
+    - 0.12494032188721449
+    - -0.19374741686112923
+    - 0.5446233087623868
+- index: 80
+  transform:
+    stamp:
+      sec: 1783589155
+      nanosec: 310398909
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.12229284644126892
+    - -0.46452006697654724
+    - -1.3254992961883545
+    rotation_xyzw:
+    - 0.8117602759724422
+    - 0.10707565872556264
+    - -0.17012916843472095
+    - 0.5483029488424639
+- index: 81
+  transform:
+    stamp:
+      sec: 1783589155
+      nanosec: 570487065
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.12489832937717438
+    - -0.4639074504375458
+    - -1.3270846605300903
+    rotation_xyzw:
+    - 0.8115064552350966
+    - 0.09803116542230246
+    - -0.15521334445841528
+    - 0.5547575879785214
+- index: 82
+  transform:
+    stamp:
+      sec: 1783589155
+      nanosec: 840519864
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.12838159501552582
+    - -0.4638890326023102
+    - -1.3255287408828735
+    rotation_xyzw:
+    - 0.8163576033282071
+    - 0.08041849600848697
+    - -0.12806027632502698
+    - 0.5573990443259803
+- index: 83
+  transform:
+    stamp:
+      sec: 1783589156
+      nanosec: 100519820
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1316511332988739
+    - -0.46505728363990784
+    - -1.3192851543426514
+    rotation_xyzw:
+    - 0.8282805028669393
+    - 0.039494467039937996
+    - -0.07744374330736452
+    - 0.5535287366219253
+- index: 84
+  transform:
+    stamp:
+      sec: 1783589156
+      nanosec: 340556676
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1356954276561737
+    - -0.46434956789016724
+    - -1.3223085403442383
+    rotation_xyzw:
+    - 0.8270645769733934
+    - -0.003726031570549713
+    - -0.02392987307027818
+    - 0.5615849565109425
+- index: 85
+  transform:
+    stamp:
+      sec: 1783589156
+      nanosec: 610619062
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.14825667440891266
+    - -0.46457016468048096
+    - -1.3201591968536377
+    rotation_xyzw:
+    - 0.8262406846661343
+    - -0.06178093249787744
+    - 0.06799886798309555
+    - 0.5557747757276758
+- index: 86
+  transform:
+    stamp:
+      sec: 1783589156
+      nanosec: 851379539
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.15551821887493134
+    - -0.4646146893501282
+    - -1.3208248615264893
+    rotation_xyzw:
+    - 0.8236811008713265
+    - -0.07356755849494953
+    - 0.09965178033702735
+    - 0.5533595405160668
+- index: 87
+  transform:
+    stamp:
+      sec: 1783589157
+      nanosec: 80715921
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.164903923869133
+    - -0.46461835503578186
+    - -1.3235175609588623
+    rotation_xyzw:
+    - 0.8174219516515593
+    - -0.08941299321010653
+    - 0.14154429886895215
+    - 0.5511731860867889
+- index: 88
+  transform:
+    stamp:
+      sec: 1783589157
+      nanosec: 300753508
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.17137590050697327
+    - -0.463937371969223
+    - -1.3305573463439941
+    rotation_xyzw:
+    - 0.8092716361736767
+    - -0.08353639718076228
+    - 0.15708950323061066
+    - 0.5598428147307047
+- index: 89
+  transform:
+    stamp:
+      sec: 1783589157
+      nanosec: 550774996
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1760663092136383
+    - -0.4636995792388916
+    - -1.3349839448928833
+    rotation_xyzw:
+    - 0.8021011502247497
+    - -0.09121823036816597
+    - 0.17973661353383477
+    - 0.5621456475078525
+- index: 90
+  transform:
+    stamp:
+      sec: 1783589157
+      nanosec: 810847335
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.18006615340709686
+    - -0.4643051028251648
+    - -1.334260106086731
+    rotation_xyzw:
+    - 0.7978383949066717
+    - -0.11440183350315425
+    - 0.2132811655243641
+    - 0.5521569165884196
+- index: 91
+  transform:
+    stamp:
+      sec: 1783589158
+      nanosec: 70844770
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.18570184707641602
+    - -0.463833212852478
+    - -1.3437230587005615
+    rotation_xyzw:
+    - 0.7862369331896939
+    - -0.1095968347831258
+    - 0.23031451547718682
+    - 0.5628278978999652
+- index: 92
+  transform:
+    stamp:
+      sec: 1783589158
+      nanosec: 340910066
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.18722039461135864
+    - -0.4630088210105896
+    - -1.3565185070037842
+    rotation_xyzw:
+    - 0.7589501765514777
+    - -0.15073233877692302
+    - 0.28716853116572094
+    - 0.5646314074397936
+- index: 93
+  transform:
+    stamp:
+      sec: 1783589158
+      nanosec: 670912495
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.19359110295772552
+    - -0.4641110301017761
+    - -1.358708381652832
+    rotation_xyzw:
+    - 0.7389078873764454
+    - -0.1964578498114245
+    - 0.3549967895021587
+    - 0.5379560638783712
+- index: 94
+  transform:
+    stamp:
+      sec: 1783589158
+      nanosec: 941029143
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.19809062778949738
+    - -0.4647339880466461
+    - -1.3645814657211304
+    rotation_xyzw:
+    - 0.7206703770311371
+    - -0.21661560427128118
+    - 0.395346931498546
+    - 0.5266998114777244
+- index: 95
+  transform:
+    stamp:
+      sec: 1783589159
+      nanosec: 231292624
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.20473763346672058
+    - -0.466128945350647
+    - -1.3736714124679565
+    rotation_xyzw:
+    - 0.6946097124688471
+    - -0.23815626479056545
+    - 0.4474778872881961
+    - 0.510453211639465
+- index: 96
+  transform:
+    stamp:
+      sec: 1783589159
+      nanosec: 461093891
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.21299251914024353
+    - -0.46837905049324036
+    - -1.3749750852584839
+    rotation_xyzw:
+    - 0.6758598583368397
+    - -0.26404418014825565
+    - 0.49710605050131684
+    - 0.47579375508062816
+- index: 97
+  transform:
+    stamp:
+      sec: 1783589159
+      nanosec: 751192319
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.21649782359600067
+    - -0.46964505314826965
+    - -1.3842302560806274
+    rotation_xyzw:
+    - 0.6297933715845048
+    - -0.30724419347265486
+    - 0.5647382750317907
+    - 0.43592659404959144
+- index: 98
+  transform:
+    stamp:
+      sec: 1783589160
+      nanosec: 21206952
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.2248578816652298
+    - -0.4744460880756378
+    - -1.4054884910583496
+    rotation_xyzw:
+    - 0.5672233333038889
+    - -0.33042552919571605
+    - 0.6466708035639567
+    - 0.388450166210935
+- index: 99
+  transform:
+    stamp:
+      sec: 1783589160
+      nanosec: 261230611
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.2257055640220642
+    - -0.4763442873954773
+    - -1.4150221347808838
+    rotation_xyzw:
+    - 0.5441019699177986
+    - -0.33401869820457797
+    - 0.6710401890647079
+    - 0.3769477685851069
+- index: 100
+  transform:
+    stamp:
+      sec: 1783589160
+      nanosec: 501281351
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.2225925773382187
+    - -0.4762208163738251
+    - -1.4203044176101685
+    rotation_xyzw:
+    - 0.5246187954309954
+    - -0.3429706147639488
+    - 0.685482172727921
+    - 0.3704867983628824
+- index: 101
+  transform:
+    stamp:
+      sec: 1783589160
+      nanosec: 711331827
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.21554070711135864
+    - -0.4747826159000397
+    - -1.4236382246017456
+    rotation_xyzw:
+    - 0.4809413517083603
+    - -0.3771340021591882
+    - 0.7156584759327407
+    - 0.33808032545233335
+- index: 102
+  transform:
+    stamp:
+      sec: 1783589160
+      nanosec: 971390918
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.20559823513031006
+    - -0.47156664729118347
+    - -1.4221067428588867
+    rotation_xyzw:
+    - 0.4752257425737154
+    - -0.38907989275233706
+    - 0.7053007058261002
+    - 0.3540172947926351
+- index: 103
+  transform:
+    stamp:
+      sec: 1783589161
+      nanosec: 471441191
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.2003871351480484
+    - -0.4702061414718628
+    - -1.4211539030075073
+    rotation_xyzw:
+    - 0.4524527792682473
+    - -0.40927415460025074
+    - 0.7167788175088178
+    - 0.3376525961389157
+- index: 104
+  transform:
+    stamp:
+      sec: 1783589161
+      nanosec: 601457620
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1986263394355774
+    - -0.47026360034942627
+    - -1.4231916666030884
+    rotation_xyzw:
+    - 0.45500699837052455
+    - -0.4038070253939952
+    - 0.712634692907277
+    - 0.3493713098427657
+- index: 105
+  transform:
+    stamp:
+      sec: 1783589161
+      nanosec: 841518807
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.19075468182563782
+    - -0.47088363766670227
+    - -1.431732177734375
+    rotation_xyzw:
+    - 0.4030875127556469
+    - -0.423248786989799
+    - 0.744507628437822
+    - 0.3226287534768406
+- index: 106
+  transform:
+    stamp:
+      sec: 1783589162
+      nanosec: 101552520
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.18573449552059174
+    - -0.46890610456466675
+    - -1.4283901453018188
+    rotation_xyzw:
+    - 0.3744166671417256
+    - -0.44868419671663234
+    - 0.7555649245166891
+    - 0.2960004997011362
+- index: 107
+  transform:
+    stamp:
+      sec: 1783589162
+      nanosec: 371581924
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.18029099702835083
+    - -0.47103938460350037
+    - -1.4396617412567139
+    rotation_xyzw:
+    - 0.3094838785504877
+    - -0.4614819617356212
+    - 0.7929975557681687
+    - 0.24981794262162185
+- index: 108
+  transform:
+    stamp:
+      sec: 1783589162
+      nanosec: 621637730
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.17469359934329987
+    - -0.47614267468452454
+    - -1.4572579860687256
+    rotation_xyzw:
+    - 0.2698812029821526
+    - -0.44389850373125717
+    - 0.8196904970898405
+    - 0.24130011115345032
+- index: 109
+  transform:
+    stamp:
+      sec: 1783589162
+      nanosec: 861646581
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1650553047657013
+    - -0.47847452759742737
+    - -1.4658842086791992
+    rotation_xyzw:
+    - 0.22957136595296024
+    - -0.4436699440659479
+    - 0.8356412444575879
+    - 0.2283805579036544
+- index: 110
+  transform:
+    stamp:
+      sec: 1783589163
+      nanosec: 141688378
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.15404704213142395
+    - -0.4775621294975281
+    - -1.4653457403182983
+    rotation_xyzw:
+    - 0.17563705938934832
+    - -0.4622890906536429
+    - 0.847426716914542
+    - 0.19315377162025918
+- index: 111
+  transform:
+    stamp:
+      sec: 1783589163
+      nanosec: 401770798
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.14709945023059845
+    - -0.47637853026390076
+    - -1.4627621173858643
+    rotation_xyzw:
+    - 0.12835520524388405
+    - -0.4781720697158837
+    - 0.855331759599621
+    - 0.1525909369872414
+- index: 112
+  transform:
+    stamp:
+      sec: 1783589163
+      nanosec: 631813304
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1410694420337677
+    - -0.4773658812046051
+    - -1.465100646018982
+    rotation_xyzw:
+    - 0.062193105799924916
+    - -0.4818672533412251
+    - 0.8692514508310863
+    - 0.09131200893855261
+- index: 113
+  transform:
+    stamp:
+      sec: 1783589163
+      nanosec: 871861682
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1335955560207367
+    - -0.47949662804603577
+    - -1.4692957401275635
+    rotation_xyzw:
+    - 0.010562186764814843
+    - -0.4757913711065809
+    - 0.8779054198976906
+    - 0.052849646219485166
+- index: 114
+  transform:
+    stamp:
+      sec: 1783589164
+      nanosec: 131950315
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1221764013171196
+    - -0.48022064566612244
+    - -1.4687443971633911
+    rotation_xyzw:
+    - -0.03279830516235128
+    - -0.4752539883500749
+    - 0.8785381209921509
+    - 0.03505264183203958
+- index: 115
+  transform:
+    stamp:
+      sec: 1783589164
+      nanosec: 371921867
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.1112528070807457
+    - -0.4807819426059723
+    - -1.4664490222930908
+    rotation_xyzw:
+    - -0.0783377061648828
+    - -0.4745908920573466
+    - 0.8766110928040921
+    - 0.013404511996042033
+- index: 116
+  transform:
+    stamp:
+      sec: 1783589164
+      nanosec: 621935493
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.09900674223899841
+    - -0.4823024272918701
+    - -1.4646975994110107
+    rotation_xyzw:
+    - -0.1183695272389804
+    - -0.4705771977578664
+    - 0.874377148139072
+    - 0.0032185064482708006
+- index: 117
+  transform:
+    stamp:
+      sec: 1783589164
+      nanosec: 922048930
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.07922021299600601
+    - -0.4834626317024231
+    - -1.4549329280853271
+    rotation_xyzw:
+    - -0.1802911181515239
+    - -0.47305663125036335
+    - 0.8623602014690899
+    - -0.0068861649647606864
+- index: 118
+  transform:
+    stamp:
+      sec: 1783589165
+      nanosec: 192078534
+    parent_frame: steamvr_base
+    child_frame: tracker_frame
+    translation:
+    - -0.06989225000143051
+    - -0.48180073499679565
+    - -1.441656231880188
+    rotation_xyzw:
+    - -0.21993355927380806
+    - -0.4845476980930785
+    - 0.8464356473860529
+    - -0.01973455375747679
 calibration_result:
   type: pivot_calibration_translation_only
   description: Computed by keeping the tool tip fixed at one physical pivot point
@@ -77,9 +1902,9 @@ calibration_result:
   parent_frame: tracker_frame
   child_frame: teaching_pen_tip
   translation:
-  - -0.002790253465686343
-  - 0.04195251771968822
-  - 0.24514781322276752
+  - -0.0010131882892902397
+  - 0.0428469207394655
+  - 0.24551851298491542
   rotation_xyzw:
   - 0.34202134463421663
   - 4.1885534494636714e-17
@@ -87,24 +1912,138 @@ calibration_result:
   - -0.9396921835444852
   reference_frame: steamvr_base
   pivot_point_in_reference_frame:
-  - -0.2258555146199759
-  - -0.4961222433623729
-  - -1.230471753323053
-  sample_count: 4
+  - -0.14502458924431083
+  - -0.7082216388675173
+  - -1.3728729438914022
+  sample_count: 118
   rank: 6
   residuals:
-  - 1.5646254834648604e-05
+  - 0.000271465554473368
   singular_values:
-  - 2.7438105225425153
-  - 2.7033089906413603
-  - 2.6328292250182024
-  - 1.03354258349139
-  - 0.8319377988272814
-  - 0.6866613549523263
-  mean_error: 0.0018442889475884703
-  max_error: 0.0028154952860909212
+  - 15.296945280967831
+  - 12.670080096094711
+  - 12.647115649721016
+  - 8.720691815594789
+  - 8.687293615306475
+  - 1.4154381198329178
+  mean_error: 0.0013450535320937305
+  max_error: 0.0033184768079558024
   per_sample_errors:
-  - 0.0028154952860909212
-  - 0.0011192303302767115
-  - 0.001200925818868973
-  - 0.002241504355117276
+  - 0.002242161654942955
+  - 0.0023842247539703825
+  - 0.0026289863477850593
+  - 0.0030085647531408696
+  - 0.002843873206438714
+  - 0.002905823722789365
+  - 0.0025204078387935343
+  - 0.0020694031155500813
+  - 0.0016435124333559884
+  - 0.00132472968218888
+  - 0.0013080333136214115
+  - 0.0013632616165233581
+  - 0.0009867731013422254
+  - 0.0011806368224572372
+  - 0.001169292142814322
+  - 0.0006051765501869207
+  - 0.00037706780545812926
+  - 0.00037149132963500267
+  - 0.0005714369723379293
+  - 0.0005838528206168362
+  - 0.0008799159365823331
+  - 0.0010943386449641028
+  - 0.0011363431653461128
+  - 0.0013268871547342596
+  - 0.0012226154101760817
+  - 0.0014739730744625496
+  - 0.001554788778314543
+  - 0.0015603789771750913
+  - 0.0019897988840372233
+  - 0.0019999957876492055
+  - 0.0022063607600511445
+  - 0.0018914177263667988
+  - 0.0016120973367195748
+  - 0.0013925635653632847
+  - 0.0009825618411014212
+  - 0.0006824844202585206
+  - 0.00027315966357192465
+  - 0.0003816382121311314
+  - 0.00016474537170141763
+  - 0.0002980301282724013
+  - 0.000979016087721285
+  - 0.00101410871958415
+  - 0.0013580443792589726
+  - 0.0015325193404028307
+  - 0.0014748238091977382
+  - 0.00156458495347814
+  - 0.001895785207417333
+  - 0.0013916817882627542
+  - 0.0010353414988889444
+  - 0.0007573598016315182
+  - 0.0006509472043153919
+  - 0.0006054432815557194
+  - 0.0006482548649017992
+  - 0.0004588369366394389
+  - 0.0005354103612500864
+  - 0.0007306362519925454
+  - 0.0006601916558707481
+  - 0.0006560451848626261
+  - 0.0005312246368654798
+  - 0.0005773720738918042
+  - 0.000726733180690857
+  - 0.0005999426543082046
+  - 0.000523994935353776
+  - 0.0005496785036648006
+  - 0.0005373379170058989
+  - 0.0003910576586673186
+  - 0.00033642908468593357
+  - 0.00040977355256280275
+  - 0.0007861435769920919
+  - 0.0010653353426104655
+  - 0.0011610001879305291
+  - 0.001396607057340899
+  - 0.0012026931707103817
+  - 0.0011065431067955008
+  - 0.001566801993144899
+  - 0.00169115151219117
+  - 0.001644662707445212
+  - 0.0015952893406461948
+  - 0.0017859397115404
+  - 0.0018706826022305547
+  - 0.001970804046409322
+  - 0.0020953769573218376
+  - 0.002025656429489768
+  - 0.0015426977449517333
+  - 0.001117326367136941
+  - 0.0010819754657777846
+  - 0.0011707330962582474
+  - 0.0011830809477835474
+  - 0.0013124512962302342
+  - 0.0013503004798923
+  - 0.001506395615297641
+  - 0.0014976020918255363
+  - 0.0011534938296395999
+  - 0.0010214745699983678
+  - 0.0010829846122581515
+  - 0.000672748792940306
+  - 0.0008386673162544837
+  - 0.0009143322319550426
+  - 0.0006986383451570029
+  - 0.0008017779555711113
+  - 0.0011882389222521552
+  - 0.001146563553683358
+  - 0.0014990986372873877
+  - 0.0015418150681459945
+  - 0.002173492243430386
+  - 0.0019270836894498189
+  - 0.0016699128469375168
+  - 0.002368215355897659
+  - 0.0021192403695225763
+  - 0.0018193586446355273
+  - 0.001602463168663675
+  - 0.0018425430020077194
+  - 0.002079089513020049
+  - 0.0023680637980020305
+  - 0.0027168910321707907
+  - 0.0029924630100384296
+  - 0.0030865582743748394
+  - 0.0033184768079558024

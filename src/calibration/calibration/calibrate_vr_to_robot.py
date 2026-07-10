@@ -1,5 +1,6 @@
 import threading
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import rclpy
@@ -55,7 +56,7 @@ class VrToRobotSampleCollector(Node):
         self.declare_parameter("tracker_tip_frame", "teaching_pen_tip")
         self.declare_parameter("robot_parent_frame", "robot_base")
         self.declare_parameter("robot_tip_frame", "welding_torch_tip")
-        self.declare_parameter("output_file", "vr_to_robot_samples.yaml")
+        self.declare_parameter("output_file", "config/calibration/vr_to_robot.yaml")
 
         self.tracker_parent_frame = self.get_parameter("tracker_parent_frame").value
         self.tracker_tip_frame = self.get_parameter("tracker_tip_frame").value
@@ -208,6 +209,7 @@ class VrToRobotSampleCollector(Node):
             "calibration_result": self.compute_calibration(),
         }
 
+        Path(self.output_file).expanduser().parent.mkdir(parents=True, exist_ok=True)
         with open(self.output_file, "w", encoding="utf-8") as file:
             yaml.safe_dump(data, file, sort_keys=False)
 

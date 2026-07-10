@@ -1,5 +1,6 @@
 import threading
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import rclpy
@@ -59,7 +60,7 @@ class ToolVrJointCalibrator(Node):
         self.declare_parameter("tracker_parent_frame", "steamvr_base")
         self.declare_parameter("tracker_tip_frame", "teaching_pen_tip")
         self.declare_parameter("input_file", "")
-        self.declare_parameter("output_file", "tool_vr_joint_calibration.yaml")
+        self.declare_parameter("output_file", "config/calibration/tool_vr_joint_calibration.yaml")
         self.declare_parameter("min_samples", 6)
 
         # 获取实际值
@@ -298,6 +299,7 @@ class ToolVrJointCalibrator(Node):
             "calibration_result": self.compute_calibration(),
         }
 
+        Path(self.output_file).expanduser().parent.mkdir(parents=True, exist_ok=True)
         with open(self.output_file, "w", encoding="utf-8") as file:
             yaml.safe_dump(data, file, sort_keys=False)
 

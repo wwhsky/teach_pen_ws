@@ -44,6 +44,7 @@ def generate_launch_description():
         str(default_calibration_config_dir / "welding_torch_tip.yaml"),
         str(default_calibration_config_dir / "vr_to_robot.yaml"),
         str(default_calibration_config_dir / "workpiece.yaml"),
+        str(default_calibration_config_dir / "camera_hand_eye.yaml"),
     ]
 
     model = LaunchConfiguration("model")
@@ -55,9 +56,17 @@ def generate_launch_description():
     start_rsp = LaunchConfiguration("start_rsp")
     start_move_group = LaunchConfiguration("start_move_group")
     start_rviz = LaunchConfiguration("start_rviz")
+    start_camera = LaunchConfiguration("start_camera")
+    start_seam_perception = LaunchConfiguration("start_seam_perception")
     rviz_config = LaunchConfiguration("rviz_config")
     auto_power_on = LaunchConfiguration("auto_power_on")
     auto_enable = LaunchConfiguration("auto_enable")
+    camera_id = LaunchConfiguration("camera_id")
+    camera_param_file = LaunchConfiguration("camera_param_file")
+    teaching_path_file = LaunchConfiguration("teaching_path_file")
+    detected_path_file = LaunchConfiguration("detected_path_file")
+    photo_pose_file = LaunchConfiguration("photo_pose_file")
+    camera_hand_eye_file = LaunchConfiguration("camera_hand_eye_file")
 
     return LaunchDescription([
         DeclareLaunchArgument("model", default_value="zu5"),
@@ -69,6 +78,8 @@ def generate_launch_description():
         DeclareLaunchArgument("start_rsp", default_value="true"),
         DeclareLaunchArgument("start_move_group", default_value="true"),
         DeclareLaunchArgument("start_rviz", default_value="true"),
+        DeclareLaunchArgument("start_camera", default_value="true"),
+        DeclareLaunchArgument("start_seam_perception", default_value="true"),
         DeclareLaunchArgument(
             "rviz_config",
             default_value=PathJoinSubstitution([
@@ -79,6 +90,15 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("auto_power_on", default_value="true"),
         DeclareLaunchArgument("auto_enable", default_value="true"),
+        DeclareLaunchArgument("camera_id", default_value="M3GM620B014"),
+        DeclareLaunchArgument("camera_param_file", default_value="CameraSettingcollaborative.json"),
+        DeclareLaunchArgument("teaching_path_file", default_value="config/paths/demo_path.yaml"),
+        DeclareLaunchArgument("detected_path_file", default_value="config/paths/detected_seam_path.yaml"),
+        DeclareLaunchArgument("photo_pose_file", default_value="config/paths/photo_pose.yaml"),
+        DeclareLaunchArgument(
+            "camera_hand_eye_file",
+            default_value=str(default_calibration_config_dir / "camera_hand_eye.yaml"),
+        ),
 
         Node(
             package="teach_pen",
@@ -103,6 +123,32 @@ def generate_launch_description():
                 "files": calibration_files,
             }],
             condition=IfCondition(start_calibration_tf),
+        ),
+
+        Node(
+            package="teach_pen",
+            executable="ruben_camera_node",
+            name="ruben_camera_node",
+            output="screen",
+            parameters=[{
+                "camera_id": camera_id,
+                "camera_param_file": camera_param_file,
+            }],
+            condition=IfCondition(start_camera),
+        ),
+
+        Node(
+            package="teach_pen",
+            executable="seam_perception_node",
+            name="seam_perception_node",
+            output="screen",
+            parameters=[{
+                "teaching_path_file": teaching_path_file,
+                "output_path_file": detected_path_file,
+                "path_orientation_file": photo_pose_file,
+                "hand_eye_file": camera_hand_eye_file,
+            }],
+            condition=IfCondition(start_seam_perception),
         ),
 
         include_moveit_launch(

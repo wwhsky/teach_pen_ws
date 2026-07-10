@@ -1,8 +1,126 @@
-created_at: '2026-07-01T17:48:22'
+created_at: '2026-07-09T16:52:10'
 frames:
   reference_frame: robot_base
   parent_frame: robot_flange
   tip_frame: welding_torch_tip
-sample_count: 0
-samples: []
-calibration_result: null
+sample_count: 5
+samples:
+- index: 1
+  transform:
+    stamp:
+      sec: 1783587117
+      nanosec: 547809707
+    parent_frame: robot_base
+    child_frame: robot_flange
+    translation:
+    - -0.6252933677262051
+    - 0.06276856384600042
+    - 0.33539554771758706
+    rotation_xyzw:
+    - 0.8201225585243949
+    - -0.568021906538829
+    - -0.04833232585523595
+    - 0.04913337937510038
+- index: 2
+  transform:
+    stamp:
+      sec: 1783587118
+      nanosec: 635915168
+    parent_frame: robot_base
+    child_frame: robot_flange
+    translation:
+    - -0.6252933677262051
+    - 0.06276856384600042
+    - 0.33539554771758706
+    rotation_xyzw:
+    - 0.8201225585243949
+    - -0.568021906538829
+    - -0.04833232585523595
+    - 0.04913337937510038
+- index: 3
+  transform:
+    stamp:
+      sec: 1783587119
+      nanosec: 643964253
+    parent_frame: robot_base
+    child_frame: robot_flange
+    translation:
+    - -0.6252933677262051
+    - 0.06276856384600042
+    - 0.33539554771758706
+    rotation_xyzw:
+    - 0.8201225585243949
+    - -0.568021906538829
+    - -0.04833232585523595
+    - 0.04913337937510038
+- index: 4
+  transform:
+    stamp:
+      sec: 1783587121
+      nanosec: 595952089
+    parent_frame: robot_base
+    child_frame: robot_flange
+    translation:
+    - -0.6252933677262051
+    - 0.06276856384600042
+    - 0.33539554771758706
+    rotation_xyzw:
+    - 0.8201225585243949
+    - -0.568021906538829
+    - -0.04833232585523595
+    - 0.04913337937510038
+- index: 5
+  transform:
+    stamp:
+      sec: 1783587125
+      nanosec: 123880958
+    parent_frame: robot_base
+    child_frame: robot_flange
+    translation:
+    - -0.6252933677262051
+    - 0.06276856384600042
+    - 0.33539554771758706
+    rotation_xyzw:
+    - 0.8201225585243949
+    - -0.568021906538829
+    - -0.04833232585523595
+    - 0.04913337937510038
+calibration_result:
+  type: pivot_calibration_translation_only
+  description: Computed by keeping the tool tip fixed at one physical pivot point
+    and moving the parent frame through different orientations. Rotation is left as
+    identity and can be edited manually.
+  parent_frame: robot_flange
+  child_frame: welding_torch_tip
+  translation:
+  - 0.1427594771192246
+  - -0.3015487369566661
+  - 0.12467379986226962
+  rotation_xyzw:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  reference_frame: robot_base
+  pivot_point_in_reference_frame:
+  - -0.31264668386310257
+  - 0.031384281923000246
+  - 0.16769777385879348
+  sample_count: 5
+  rank: 3
+  residuals: []
+  singular_values:
+  - 3.1622776601683795
+  - 3.162277660168379
+  - 3.162277660168378
+  - 5.797299454430193e-16
+  - 2.754361969680086e-16
+  - 7.176610589584502e-17
+  mean_error: 1.2412670766236366e-16
+  max_error: 1.2412670766236366e-16
+  per_sample_errors:
+  - 1.2412670766236366e-16
+  - 1.2412670766236366e-16
+  - 1.2412670766236366e-16
+  - 1.2412670766236366e-16
+  - 1.2412670766236366e-16

@@ -145,7 +145,7 @@ public:
 
     m_cloud_sub = create_subscription<sensor_msgs::msg::PointCloud2>(
       m_input_cloud_topic,
-      rclcpp::SensorDataQoS(),
+      rclcpp::QoS(rclcpp::KeepLast(1)).reliable(),
       std::bind(&SeamPerceptionNode::cloudCallback, this, std::placeholders::_1));
 
     m_path_pub = create_publisher<nav_msgs::msg::Path>(m_measured_path_topic, 10);
@@ -219,29 +219,29 @@ private:
       return;
     }
 
+    std::vector<int> valid_indices;
+    pcl::removeNaNFromPointCloud(*working_cloud, *working_cloud, valid_indices);
+    if (working_cloud->empty()) {
+      RCLCPP_WARN(get_logger(), "input cloud is empty after NaN removal");
+      return;
+    }
+
+    working_cloud = downsample(working_cloud);
     working_cloud = cropCloudByTeachingPath(working_cloud);
     if (!working_cloud) {
       return;
     }
 
-    std::vector<int> valid_indices;
-    pcl::removeNaNFromPointCloud(*working_cloud, *working_cloud, valid_indices);
-    if (working_cloud->empty()) {
-      RCLCPP_WARN(get_logger(), "input ROI cloud is empty after NaN removal");
-      return;
-    }
-
-    const CloudPtr filtered = downsample(working_cloud);
-    if (filtered->size() < static_cast<std::size_t>(m_min_plane_inliers * 2)) {
+    if (working_cloud->size() < static_cast<std::size_t>(m_min_plane_inliers * 2)) {
       RCLCPP_WARN(
         get_logger(),
         "not enough points for two-plane fitting: %zu",
-        filtered->size());
+        working_cloud->size());
       return;
     }
 
     CloudPtr remaining(new CloudT);
-    *remaining = *filtered;
+    *remaining = *working_cloud;
 
     PlaneFit plane_a;
     CloudPtr plane_a_cloud(new CloudT);

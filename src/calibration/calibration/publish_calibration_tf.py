@@ -25,12 +25,15 @@ class CalibrationTfPublisher(Node):
             "config/calibration/workpiece.yaml",
         ])
 
-        self.files = list(self.get_parameter("files").value)
+        self.files = [Path(file_name).expanduser() for file_name in self.get_parameter("files").value]
         self.broadcaster = StaticTransformBroadcaster(self)
+        self.file_mtimes = {}
         self.transforms = self.load_transforms()
+        self.update_file_mtimes()
 
         if self.transforms:
-            self.broadcaster.sendTransform(self.transforms)
+            self.publish_transforms()
+            self.timer = self.create_timer(1.0, self.check_and_publish)
             for T_parent_child_msg in self.transforms:
                 self.get_logger().info(
                     "published static TF %s -> %s"
@@ -39,10 +42,46 @@ class CalibrationTfPublisher(Node):
         else:
             self.get_logger().warn("no calibration TFs were loaded")
 
+    def publish_transforms(self):
+        stamp = self.get_clock().now().to_msg()
+        for T_parent_child_msg in self.transforms:
+            T_parent_child_msg.header.stamp = stamp
+        self.broadcaster.sendTransform(self.transforms)
+
+    def check_and_publish(self):
+        if self.files_changed():
+            transforms = self.load_transforms()
+            if transforms:
+                self.transforms = transforms
+                self.update_file_mtimes()
+                self.get_logger().info("calibration yaml changed; reloaded TFs")
+            else:
+                self.get_logger().warn("calibration yaml changed, but no valid TFs were loaded")
+
+        if self.transforms:
+            self.publish_transforms()
+
+    def files_changed(self):
+        for path in self.files:
+            try:
+                mtime = path.stat().st_mtime_ns
+            except OSError:
+                mtime = None
+            if self.file_mtimes.get(path) != mtime:
+                return True
+        return False
+
+    def update_file_mtimes(self):
+        self.file_mtimes = {}
+        for path in self.files:
+            try:
+                self.file_mtimes[path] = path.stat().st_mtime_ns
+            except OSError:
+                self.file_mtimes[path] = None
+
     def load_transforms(self):
         T_parent_child_msgs = []
-        for file_name in self.files:
-            path = Path(file_name).expanduser()
+        for path in self.files:
             if not path.exists():
                 self.get_logger().warn(f"calibration file not found: {path}")
                 continue

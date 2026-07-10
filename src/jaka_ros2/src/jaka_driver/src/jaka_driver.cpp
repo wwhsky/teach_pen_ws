@@ -266,6 +266,22 @@ bool servo_p_callback(const shared_ptr<jaka_msgs::srv::ServoMove::Request> reque
 bool servo_j_callback(const shared_ptr<jaka_msgs::srv::ServoMove::Request> request,
     shared_ptr<jaka_msgs::srv::ServoMove::Response> response)
 {
+    unsigned int step_num = 1;
+    if (!request->speed.empty())
+    {
+        const float requested_step_num = request->speed[0];
+        const unsigned int converted_step_num =
+            static_cast<unsigned int>(requested_step_num);
+        if (requested_step_num < 1.0F || requested_step_num > 100.0F ||
+            static_cast<float>(converted_step_num) != requested_step_num)
+        {
+            response->ret = 0;
+            response->message = "servo_j step_num must be an integer from 1 to 100";
+            return false;
+        }
+        step_num = converted_step_num;
+    }
+
     JointValue joint_pose;
     joint_pose.jVal[0] = request->pose[0];
     joint_pose.jVal[1] = request->pose[1];
@@ -273,12 +289,13 @@ bool servo_j_callback(const shared_ptr<jaka_msgs::srv::ServoMove::Request> reque
     joint_pose.jVal[3] = request->pose[3];
     joint_pose.jVal[4] = request->pose[4];
     joint_pose.jVal[5] = request->pose[5];
-    int ret = robot.servo_j(&joint_pose, MoveMode::INCR);
+    int ret = robot.servo_j(&joint_pose, MoveMode::INCR, step_num);
     switch(ret)
     {
         case 0:
             response->ret = 1;
-            response->message = "Servo_j has been executed";
+            response->message = "Servo_j has been executed with step_num=" +
+                to_string(step_num);
             break;
         default:
             response->ret = 0;

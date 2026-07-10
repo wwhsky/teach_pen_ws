@@ -1,0 +1,6 @@
+# 服务请求：客户端输入的字符串（支持：capture、capture2D、capture3D）
+string input
+---
+# 服务响应：服务端返回的RGB图、点云
+sensor_msgs/Image rgb_image
+sensor_msgs/PointCloud2 point_cloud

@@ -1,0 +1,28 @@
+base_frame: robot_base
+tip_frame: welding_torch_tip
+source_cloud_frame: robot_base
+source_teaching_path: config/paths/demo_path.yaml
+sample_count: 2
+samples:
+  - index: 0
+    stamp_sec: 1783654391.6295466
+    translation:
+      - -0.9371720916762516
+      - 0.046934220676963068
+      - -0.011865721437190838
+    rotation_xyzw:
+      - -0.36568732217850913
+      - 0.79840205990447521
+      - 0.42184902055945311
+      - -0.22554453438563385
+  - index: 1
+    stamp_sec: 1783654391.6295798
+    translation:
+      - -0.74989352438303059
+      - 0.24555783504383932
+      - -0.0097685689780398714
+    rotation_xyzw:
+      - -0.36568732217850913
+      - 0.79840205990447521
+      - 0.42184902055945311
+      - -0.22554453438563385
