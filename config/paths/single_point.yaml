@@ -1,0 +1,15 @@
+base_frame: robot_base
+tip_frame: teaching_pen_tip
+sample_count: 1
+samples:
+  - index: 0
+    stamp_sec: 1783671440.6384091
+    translation:
+      - -0.72836163942669896
+      - -0.018768348995352735
+      - 0.066624114356737651
+    rotation_xyzw:
+      - 0.63381709551078691
+      - -0.52468473040717223
+      - -0.31719289476926632
+      - 0.47156175695630381

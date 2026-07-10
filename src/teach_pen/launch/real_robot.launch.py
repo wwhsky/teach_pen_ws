@@ -67,6 +67,7 @@ def generate_launch_description():
     detected_path_file = LaunchConfiguration("detected_path_file")
     photo_pose_file = LaunchConfiguration("photo_pose_file")
     camera_hand_eye_file = LaunchConfiguration("camera_hand_eye_file")
+    detected_path_z_offset = LaunchConfiguration("detected_path_z_offset")
 
     return LaunchDescription([
         DeclareLaunchArgument("model", default_value="zu5"),
@@ -91,10 +92,11 @@ def generate_launch_description():
         DeclareLaunchArgument("auto_power_on", default_value="true"),
         DeclareLaunchArgument("auto_enable", default_value="true"),
         DeclareLaunchArgument("camera_id", default_value="M3GM620B014"),
-        DeclareLaunchArgument("camera_param_file", default_value="CameraSettingcollaborative.json"),
+        DeclareLaunchArgument("camera_param_file", default_value="CameraSettingweld.json"),
         DeclareLaunchArgument("teaching_path_file", default_value="config/paths/demo_path.yaml"),
         DeclareLaunchArgument("detected_path_file", default_value="config/paths/detected_seam_path.yaml"),
         DeclareLaunchArgument("photo_pose_file", default_value="config/paths/photo_pose.yaml"),
+        DeclareLaunchArgument("detected_path_z_offset", default_value="-0.003"),
         DeclareLaunchArgument(
             "camera_hand_eye_file",
             default_value=str(default_calibration_config_dir / "camera_hand_eye.yaml"),
@@ -147,6 +149,8 @@ def generate_launch_description():
                 "output_path_file": detected_path_file,
                 "path_orientation_file": photo_pose_file,
                 "hand_eye_file": camera_hand_eye_file,
+                "path_roi_radius": 0.1,
+                "detected_path_z_offset": detected_path_z_offset,
             }],
             condition=IfCondition(start_seam_perception),
         ),

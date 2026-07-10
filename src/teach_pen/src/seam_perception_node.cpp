@@ -126,7 +126,7 @@ public:
     m_distance_threshold = declare_parameter<double>("distance_threshold", 0.002);
     m_voxel_leaf_size = declare_parameter<double>("voxel_leaf_size", 0.001);
     m_min_plane_inliers = declare_parameter<int>("min_plane_inliers", 100);
-    m_path_roi_radius = declare_parameter<double>("path_roi_radius", 0.05);
+    m_path_roi_radius = declare_parameter<double>("path_roi_radius", 0.03);
     m_max_iterations = declare_parameter<int>("max_iterations", 200);
     m_min_plane_angle_deg = declare_parameter<double>("min_plane_angle_deg", 20.0);
     m_max_second_plane_candidates = declare_parameter<int>("max_second_plane_candidates", 8);
@@ -138,6 +138,7 @@ public:
     m_publish_debug_cloud = declare_parameter<bool>("publish_debug_cloud", true);
     m_save_output_path = declare_parameter<bool>("save_output_path", true);
     m_republish_interval_sec = declare_parameter<double>("republish_interval_sec", 1.0);
+    m_detected_path_z_offset = declare_parameter<double>("detected_path_z_offset", 0.0);
 
     loadTeachingPath();
     loadHandEyeTransform();
@@ -986,7 +987,23 @@ private:
     root["source_teaching_path"] = m_teaching_path_file;
     root["sample_count"] = 2;
 
-    const std::array<Eigen::Vector3d, 2> points = {start_point, end_point};
+    const Eigen::Quaterniond path_orientation(
+      m_path_orientation_xyzw[3],
+      m_path_orientation_xyzw[0],
+      m_path_orientation_xyzw[1],
+      m_path_orientation_xyzw[2]);
+    const Eigen::Vector3d tcp_z_axis =
+      path_orientation.normalized() * Eigen::Vector3d::UnitZ();
+    const Eigen::Vector3d output_offset = m_detected_path_z_offset * tcp_z_axis;
+    const std::array<Eigen::Vector3d, 2> points = {
+      start_point + output_offset,
+      end_point + output_offset};
+    root["detected_path_z_offset"] = m_detected_path_z_offset;
+    root["detected_path_z_offset_frame"] = "path_tcp_z";
+    root["detected_path_z_axis"] = std::vector<double>{
+      tcp_z_axis.x(),
+      tcp_z_axis.y(),
+      tcp_z_axis.z()};
     YAML::Node samples_node(YAML::NodeType::Sequence);
     for (std::size_t i = 0; i < points.size(); ++i) {
       YAML::Node item;
@@ -1079,6 +1096,7 @@ private:
   int m_min_points_per_bin{2};
   double m_min_segment_length{0.02};
   double m_republish_interval_sec{1.0};
+  double m_detected_path_z_offset{0.0};
   bool m_publish_debug_cloud{true};
   bool m_save_output_path{true};
   bool m_path_orientation_loaded{false};
